@@ -1,3 +1,33 @@
+// ECF club code to full name lookup
+const CLUB_NAMES = {
+    "4DAF": "Downend & Fishponds",
+    "4BAC": "Bristol & Clifton",
+    "4BRC": "Bristol Cabot",
+    "4BRG": "Bristol Grendel",
+    "4SEM": "North Bristol",
+    "4BRH": "Horfield & Redland",
+    "4PTH": "Portishead",
+    "4YAT": "Yate & Sodbury",
+    "4SBR": "South Bristol",
+    "4369": "The 369 Chess Club",
+    "4BRL": "Bristol",
+    "4BRU": "Bristol University",
+    "4BRJ": "Bristol Juniors",
+    "4BRO": "Bristol Royals",
+    "4B4K": "Bristol Four Knights",
+    "4CAH": "Cadbury Heath",
+    "4BRT": "Thornbury Bristol",
+    "4UWE": "University of West of England",
+    "4ELR": "El Rincon",
+    "4KOB": "Knights Of Bristol",
+    "4BOM": "Opening Moves",
+}
+
+function clubName(code, ecfName) {
+    if (ecfName && ecfName.trim()) return ecfName.trim()
+    return CLUB_NAMES[code] || code
+}
+
 // ECF Ratings proxy with caching
 // Caches responses for 24 hours to respect ECF rate limits
 
@@ -79,7 +109,7 @@ export default async function handler(req, res) {
                     players.push({
                         ecf_code: ecf,
                         full_name: full,
-                        club: idx.club >= 0 ? p[idx.club] || "" : "",
+                        club: clubName(code, idx.club >= 0 ? p[idx.club] : ""),
                         std: idx.std >= 0 ? p[idx.std] : null,
                         rpd: idx.rpd >= 0 ? p[idx.rpd] : null,
                         btz: idx.btz >= 0 ? p[idx.btz] : null,
@@ -141,12 +171,12 @@ export default async function handler(req, res) {
                         ? p[idx.full]
                         : `${p[idx.fname] || ""} ${p[idx.lname] || ""}`.trim()
 
-                    const clubName = (idx.club >= 0 && p[idx.club]) ? p[idx.club] : clubCode
+                    const clubNameVal = clubName(clubCode, idx.club >= 0 ? p[idx.club] : "")
 
                     players.push({
                         ecf_code: ecf,
                         full_name: full,
-                        club: clubName,
+                        club: clubNameVal,
                         std_current: stdNum,
                     })
                 })
