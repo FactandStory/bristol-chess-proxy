@@ -236,7 +236,7 @@ export default async function handler(req, res) {
     // Default: proxy any allowed ECF endpoint
     if (!endpoint) return res.status(400).json({ error: "Missing endpoint parameter" })
 
-    const allowed = /^v2\/(club_players|clubs|players|ratings|games)\//
+    const allowed = /^v2\/(club_players|clubs|players|ratings|games)\/|^v2\/new\/list_top_players\.php/
     if (!allowed.test(endpoint)) return res.status(403).json({ error: "Endpoint not allowed" })
 
     try {
