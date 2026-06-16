@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-    // Allow requests from Framer and local dev
     res.setHeader("Access-Control-Allow-Origin", "*")
     res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS")
     res.setHeader("Access-Control-Allow-Headers", "Content-Type")
@@ -18,7 +17,10 @@ export default async function handler(req, res) {
     try {
         const response = await fetch(url, {
             headers: {
-                "User-Agent": "Bristol Chess Hub/1.0",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-GB,en;q=0.9",
+                "Referer": "https://lms.englishchess.org.uk/",
             },
         })
 
@@ -27,8 +29,6 @@ export default async function handler(req, res) {
         }
 
         const text = await response.text()
-
-        // Cache for 10 minutes
         res.setHeader("Cache-Control", "s-maxage=600, stale-while-revalidate")
         res.setHeader("Content-Type", "text/plain")
         return res.status(200).send(text)
