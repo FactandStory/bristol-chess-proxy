@@ -233,6 +233,29 @@ export default async function handler(req, res) {
         }
     }
 
+    // Debug action: see raw U18 response
+    if (action === "debug_u18") {
+        try {
+            const u18Url = "https://rating.englishchess.org.uk/v2/new/list_top_players.php?domain=S&age_limit=U18&age_class=under&age_col=age31dec&nation=ENG&gender=both&type=rating&format=json"
+            const u18Response = await fetch(u18Url, {
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "application/json",
+                    "Referer": "https://rating.englishchess.org.uk/",
+                },
+            })
+            if (!u18Response.ok) return res.status(u18Response.status).json({ error: `U18 error: ${u18Response.status}` })
+            const data = await u18Response.json()
+            // Return first 3 players and keys to understand structure
+            const sample = Array.isArray(data) ? data.slice(0, 3) : 
+                          data.players ? { keys: Object.keys(data.players[0] || {}), sample: data.players.slice(0, 3) } :
+                          { keys: Object.keys(data), raw: JSON.stringify(data).slice(0, 500) }
+            return res.status(200).json(sample)
+        } catch (err) {
+            return res.status(500).json({ error: err.message })
+        }
+    }
+
     // Special action: fetch Bristol juniors by cross-referencing national U18 list
     if (action === "bristol_juniors") {
         try {
