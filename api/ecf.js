@@ -1,52 +1,211 @@
 // ECF Ratings proxy with caching
-// Fetches from rating.englishchess.org.uk and caches for 24 hours
+// Caches responses for 24 hours to respect ECF rate limits
 
-const CACHE = {}  // In-memory cache (persists for lifetime of serverless instance)
-const CACHE_TTL = 60 * 60 * 24 * 1000  // 24 hours in ms
+const CACHE = {}
+const CACHE_TTL = 60 * 60 * 24 * 1000 // 24 hours
+
+// Bristol & Districts club codes
+const BRISTOL_CLUBS = [
+    "4DAF", "4BAC", "4BRC", "4BRG", "4SEM", "4BRH",
+    "4PTH", "4YAT", "4SBR", "4369", "4BRL", "4BRU"
+]
+
+async function fetchECF(endpoint) {
+    const cached = CACHE[endpoint]
+    if (cached && Date.now() - cached.ts < CACHE_TTL) {
+        return { data: cached.data, hit: true }
+    }
+    const url = `https://rating.englishchess.org.uk/v2/new/api.php?${endpoint}`
+    const response = await fetch(url, {
+        headers: {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json",
+            "Referer": "https://rating.englishchess.org.uk/",
+        },
+    })
+    if (!response.ok) throw new Error(`ECF error: ${response.status}`)
+    const data = await response.json()
+    CACHE[endpoint] = { data, ts: Date.now() }
+    return { data, hit: false }
+}
 
 export default async function handler(req, res) {
     res.setHeader("Access-Control-Allow-Origin", "*")
     res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS")
     res.setHeader("Access-Control-Allow-Headers", "Content-Type")
-
     if (req.method === "OPTIONS") return res.status(200).end()
 
-    const { endpoint } = req.query
-    if (!endpoint) return res.status(400).json({ error: "Missing endpoint parameter" })
+    const { endpoint, action } = req.query
 
-    // Only allow ECF rating API paths
+    // Special action: fetch all Bristol clubs and return merged player list
+    if (action === "bristol_players") {
+        try {
+            const results = await Promise.all(
+                BRISTOL_CLUBS.map(code =>
+                    fetchECF(`v2/club_players/${code}`).catch(() => null)
+                )
+            )
+
+            const seen = new Set()
+            const players = []
+
+            results.forEach(result => {
+                if (!result || !result.data) return
+                const { data } = result
+                const cols = data.column_names || []
+                const rows = data.players || []
+
+                const idx = {
+                    ecf: cols.indexOf("ECF_code"),
+                    full: cols.indexOf("full_name"),
+                    fname: cols.indexOf("first_name"),
+                    lname: cols.indexOf("last_name"),
+                    club: cols.indexOf("club_name"),
+                    std: cols.indexOf("std"),
+                    rpd: cols.indexOf("rpd"),
+                    btz: cols.indexOf("btz"),
+                    member_no: cols.indexOf("member_no"),
+                }
+
+                rows.forEach(p => {
+                    const ecf = idx.ecf >= 0 ? p[idx.ecf] : p[0]
+                    if (!ecf || seen.has(ecf)) return
+                    seen.add(ecf)
+
+                    const full = idx.full >= 0 && p[idx.full]
+                        ? p[idx.full]
+                        : `${p[idx.fname] || ""} ${p[idx.lname] || ""}`.trim()
+
+                    players.push({
+                        ecf_code: ecf,
+                        full_name: full,
+                        club: idx.club >= 0 ? p[idx.club] || "" : "",
+                        std: idx.std >= 0 ? p[idx.std] : null,
+                        rpd: idx.rpd >= 0 ? p[idx.rpd] : null,
+                        btz: idx.btz >= 0 ? p[idx.btz] : null,
+                        member_no: idx.member_no >= 0 ? p[idx.member_no] : null,
+                    })
+                })
+            })
+
+            res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
+            return res.status(200).json({ players, total: players.length })
+        } catch (err) {
+            return res.status(500).json({ error: err.message })
+        }
+    }
+
+    // Special action: get rating history for top Bristol players to calculate improvement
+    if (action === "bristol_improvement") {
+        try {
+            // First get all current Bristol players
+            const results = await Promise.all(
+                BRISTOL_CLUBS.map(code =>
+                    fetchECF(`v2/club_players/${code}`).catch(() => null)
+                )
+            )
+
+            const seen = new Set()
+            const players = []
+
+            results.forEach(result => {
+                if (!result || !result.data) return
+                const { data } = result
+                const cols = data.column_names || []
+                const rows = data.players || []
+
+                const idx = {
+                    ecf: cols.indexOf("ECF_code"),
+                    full: cols.indexOf("full_name"),
+                    fname: cols.indexOf("first_name"),
+                    lname: cols.indexOf("last_name"),
+                    club: cols.indexOf("club_name"),
+                    std: cols.indexOf("std"),
+                    member_no: cols.indexOf("member_no"),
+                }
+
+                rows.forEach(p => {
+                    const ecf = idx.ecf >= 0 ? p[idx.ecf] : p[0]
+                    if (!ecf || seen.has(ecf)) return
+                    seen.add(ecf)
+
+                    const std = idx.std >= 0 ? p[idx.std] : null
+                    if (!std) return // skip unrated
+
+                    const stdNum = parseInt(String(std).replace(/[^0-9]/g, ""))
+                    if (isNaN(stdNum) || stdNum === 0) return
+
+                    const full = idx.full >= 0 && p[idx.full]
+                        ? p[idx.full]
+                        : `${p[idx.fname] || ""} ${p[idx.lname] || ""}`.trim()
+
+                    players.push({
+                        ecf_code: ecf,
+                        full_name: full,
+                        club: idx.club >= 0 ? p[idx.club] || "" : "",
+                        std_current: stdNum,
+                    })
+                })
+            })
+
+            // Get previous month's date (1st of last month)
+            const now = new Date()
+            const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+            const prevDate = prevMonth.toISOString().split("T")[0]
+
+            // Fetch historical ratings for each player (top 100 by current rating)
+            const top100 = players
+                .sort((a, b) => b.std_current - a.std_current)
+                .slice(0, 100)
+
+            const historyResults = await Promise.all(
+                top100.map(p =>
+                    fetchECF(`v2/ratings/S/${p.ecf_code}/${prevDate}`)
+                        .then(r => ({ ecf: p.ecf_code, prev: r.data }))
+                        .catch(() => ({ ecf: p.ecf_code, prev: null }))
+                )
+            )
+
+            // Build improvement list
+            const improved = []
+            historyResults.forEach(({ ecf, prev }) => {
+                const player = top100.find(p => p.ecf_code === ecf)
+                if (!player || !prev) return
+
+                // Previous rating value
+                const prevRating = prev.rating
+                    ? parseInt(String(prev.rating).replace(/[^0-9]/g, ""))
+                    : null
+
+                if (!prevRating || isNaN(prevRating) || prevRating === 0) return
+
+                const delta = player.std_current - prevRating
+                improved.push({
+                    ...player,
+                    std_previous: prevRating,
+                    delta,
+                })
+            })
+
+            // Sort by biggest improvement
+            improved.sort((a, b) => b.delta - a.delta)
+
+            res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
+            return res.status(200).json({ players: improved, prev_date: prevDate })
+        } catch (err) {
+            return res.status(500).json({ error: err.message })
+        }
+    }
+
+    // Default: proxy any allowed ECF endpoint
+    if (!endpoint) return res.status(400).json({ error: "Missing endpoint or action parameter" })
+
     const allowed = /^v2\/(club_players|clubs|players|ratings|games)\//
-    if (!allowed.test(endpoint)) {
-        return res.status(403).json({ error: "Endpoint not allowed" })
-    }
-
-    // Check cache
-    const cached = CACHE[endpoint]
-    if (cached && Date.now() - cached.ts < CACHE_TTL) {
-        res.setHeader("X-Cache", "HIT")
-        res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
-        return res.status(200).json(cached.data)
-    }
-
-    const url = `https://rating.englishchess.org.uk/v2/new/api.php?${endpoint}`
+    if (!allowed.test(endpoint)) return res.status(403).json({ error: "Endpoint not allowed" })
 
     try {
-        const response = await fetch(url, {
-            headers: {
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "application/json",
-                "Referer": "https://rating.englishchess.org.uk/",
-            },
-        })
-
-        if (!response.ok) return res.status(response.status).json({ error: `ECF error: ${response.status}` })
-
-        const data = await response.json()
-
-        // Store in cache
-        CACHE[endpoint] = { data, ts: Date.now() }
-
-        res.setHeader("X-Cache", "MISS")
+        const { data, hit } = await fetchECF(endpoint)
+        res.setHeader("X-Cache", hit ? "HIT" : "MISS")
         res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
         return res.status(200).json(data)
     } catch (err) {
