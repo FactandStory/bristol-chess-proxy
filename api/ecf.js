@@ -72,7 +72,9 @@ export default async function handler(req, res) {
         try {
             const results = await Promise.all(
                 BRISTOL_CLUBS.map(code =>
-                    fetchECF(`v2/club_players/${code}`).catch(() => null)
+                    fetchECF(`v2/club_players/${code}`)
+                        .then(r => ({ ...r, clubCode: code }))
+                        .catch(() => null)
                 )
             )
 
@@ -81,7 +83,7 @@ export default async function handler(req, res) {
 
             results.forEach(result => {
                 if (!result || !result.data) return
-                const { data } = result
+                const { data, clubCode } = result
                 const cols = data.column_names || []
                 const rows = data.players || []
 
@@ -109,7 +111,7 @@ export default async function handler(req, res) {
                     players.push({
                         ecf_code: ecf,
                         full_name: full,
-                        club: clubName(code, idx.club >= 0 ? p[idx.club] : ""),
+                        club: clubName(clubCode, idx.club >= 0 ? p[idx.club] : ""),
                         std: idx.std >= 0 ? p[idx.std] : null,
                         rpd: idx.rpd >= 0 ? p[idx.rpd] : null,
                         btz: idx.btz >= 0 ? p[idx.btz] : null,
