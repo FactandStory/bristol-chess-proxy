@@ -297,15 +297,16 @@ export default async function handler(req, res) {
             // Filter U18 list to Bristol players only
             const players = u18Data.players || []
             const bristolJuniors = players
+                .map((p, i) => ({ ...p, _index: i + 1 }))
                 .filter(p => bristolCodes.has(p.ECFcode))
-                .map((p, i) => ({
+                .map(p => ({
                     ecf_code: p.ECFcode,
                     full_name: p.full_name || "",
                     club: bristolCodes.get(p.ECFcode) || p.club || "",
                     std: p.current_rating || null,
                     prior: p.prior_rating || null,
                     title: p.title || "",
-                    rank_england: i + 1,
+                    rank_england: p._index,
                 }))
 
             res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
