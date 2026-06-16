@@ -233,6 +233,64 @@ export default async function handler(req, res) {
         }
     }
 
+    // Special action: fetch Bristol juniors by cross-referencing national U18 list
+    if (action === "bristol_juniors") {
+        try {
+            // Fetch national U18 list as JSON
+            const u18Url = "https://rating.englishchess.org.uk/v2/new/list_top_players.php?domain=S&age_limit=U18&age_class=under&age_col=age31dec&nation=ENG&gender=both&type=rating&format=json"
+            const u18Response = await fetch(u18Url, {
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "application/json",
+                    "Referer": "https://rating.englishchess.org.uk/",
+                },
+            })
+            if (!u18Response.ok) throw new Error(`ECF U18 error: ${u18Response.status}`)
+            const u18Data = await u18Response.json()
+
+            // Build set of all Bristol player ECF codes
+            const bristolResults = await Promise.all(
+                BRISTOL_CLUBS.map(code =>
+                    fetchECF(`v2/club_players/${code}`)
+                        .then(r => ({ ...r, clubCode: code }))
+                        .catch(() => null)
+                )
+            )
+
+            const bristolCodes = new Map()
+            bristolResults.forEach(result => {
+                if (!result || !result.data) return
+                const { data, clubCode } = result
+                const cols = data.column_names || []
+                const rows = data.players || []
+                const ecfIdx = cols.indexOf("ECF_code")
+                const clubIdx = cols.indexOf("club_name")
+                rows.forEach(p => {
+                    const ecf = ecfIdx >= 0 ? p[ecfIdx] : p[0]
+                    if (ecf) bristolCodes.set(ecf, clubName(clubCode, clubIdx >= 0 ? p[clubIdx] : ""))
+                })
+            })
+
+            // Filter U18 list to Bristol players only
+            const players = u18Data.players || []
+            const bristolJuniors = players
+                .filter(p => bristolCodes.has(p.ECF_code))
+                .map(p => ({
+                    ecf_code: p.ECF_code,
+                    full_name: p.full_name || `${p.first_name} ${p.last_name}`.trim(),
+                    club: bristolCodes.get(p.ECF_code) || p.club_name || "",
+                    std: p.rating_standard || p.std || null,
+                    rpd: p.rating_rapid || p.rpd || null,
+                    rank_england: p.rank || null,
+                }))
+
+            res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
+            return res.status(200).json({ players: bristolJuniors, total: bristolJuniors.length })
+        } catch (err) {
+            return res.status(500).json({ error: err.message })
+        }
+    }
+
     // Default: proxy any allowed ECF endpoint
     if (!endpoint) return res.status(400).json({ error: "Missing endpoint parameter" })
 
