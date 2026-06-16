@@ -173,8 +173,8 @@ export default async function handler(req, res) {
                 if (!player || !prev) return
 
                 // Previous rating value
-                const prevRating = prev.rating
-                    ? parseInt(String(prev.rating).replace(/[^0-9]/g, ""))
+                const prevRating = prev.revised_rating
+                    ? parseInt(String(prev.revised_rating).replace(/[^0-9]/g, ""))
                     : null
 
                 if (!prevRating || isNaN(prevRating) || prevRating === 0) return
@@ -198,7 +198,7 @@ export default async function handler(req, res) {
     }
 
     // Default: proxy any allowed ECF endpoint
-    if (!endpoint) return res.status(400).json({ error: "Missing endpoint or action parameter" })
+    if (!endpoint) return res.status(400).json({ error: "Missing endpoint parameter" })
 
     const allowed = /^v2\/(club_players|clubs|players|ratings|games)\//
     if (!allowed.test(endpoint)) return res.status(403).json({ error: "Endpoint not allowed" })
