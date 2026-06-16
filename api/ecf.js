@@ -233,6 +233,113 @@ export default async function handler(req, res) {
         }
     }
 
+    // Special action: fetch 12-month trajectory data for Bristol players across all rating bands
+    if (action === "bristol_trajectory") {
+        try {
+            // Get all Bristol players
+            const results = await Promise.all(
+                BRISTOL_CLUBS.map(code =>
+                    fetchECF(`v2/club_players/${code}`)
+                        .then(r => ({ ...r, clubCode: code }))
+                        .catch(() => null)
+                )
+            )
+
+            const seen = new Set()
+            const allRated = []
+
+            results.forEach(result => {
+                if (!result || !result.data) return
+                const { data, clubCode } = result
+                const cols = data.column_names || []
+                const rows = data.players || []
+                const idx = {
+                    ecf: cols.indexOf("ECF_code"),
+                    full: cols.indexOf("full_name"),
+                    fname: cols.indexOf("first_name"),
+                    lname: cols.indexOf("last_name"),
+                    club: cols.indexOf("club_name"),
+                    std: cols.indexOf("std"),
+                }
+                rows.forEach(p => {
+                    const ecf = idx.ecf >= 0 ? p[idx.ecf] : p[0]
+                    if (!ecf || seen.has(ecf)) return
+                    seen.add(ecf)
+                    const std = idx.std >= 0 ? p[idx.std] : null
+                    if (!std) return
+                    const stdNum = parseInt(String(std).replace(/[^0-9]/g, ""))
+                    if (isNaN(stdNum) || stdNum === 0) return
+                    const full = idx.full >= 0 && p[idx.full]
+                        ? p[idx.full]
+                        : `${p[idx.fname] || ""} ${p[idx.lname] || ""}`.trim()
+                    allRated.push({
+                        ecf_code: ecf,
+                        full_name: full,
+                        club: clubName(clubCode, idx.club >= 0 ? p[idx.club] : ""),
+                        std_current: stdNum,
+                    })
+                })
+            })
+
+            // Sort by rating
+            allRated.sort((a, b) => b.std_current - a.std_current)
+
+            // Sample across all rating bands — 10 per 200-point band
+            const bands = [[2000,9999],[1800,1999],[1600,1799],[1400,1599],[1200,1399],[1000,1199],[800,999],[0,799]]
+            const sampled = []
+            bands.forEach(([min, max]) => {
+                const inBand = allRated.filter(p => p.std_current >= min && p.std_current <= max).slice(0, 10)
+                sampled.push(...inBand)
+            })
+
+            // Get year-ago date
+            const now = new Date()
+            const yearAgo = new Date(now.getFullYear() - 1, now.getMonth(), 1)
+            const yearAgoDate = yearAgo.toISOString().split("T")[0]
+
+            // Fetch year-ago ratings for all sampled players
+            const historyResults = await Promise.all(
+                sampled.map(p =>
+                    fetchECF(`v2/ratings/S/${p.ecf_code}/${yearAgoDate}`)
+                        .then(r => ({ ecf: p.ecf_code, hist: r.data }))
+                        .catch(() => ({ ecf: p.ecf_code, hist: null }))
+                )
+            )
+
+            // Build trajectory data
+            const trajectories = []
+            historyResults.forEach(({ ecf, hist }) => {
+                const player = sampled.find(p => p.ecf_code === ecf)
+                if (!player || !hist) return
+                const yearAgoRating = hist.revised_rating
+                    ? parseInt(String(hist.revised_rating).replace(/[^0-9]/g, ""))
+                    : null
+                if (!yearAgoRating || isNaN(yearAgoRating) || yearAgoRating === 0) return
+                const delta = player.std_current - yearAgoRating
+                trajectories.push({
+                    ecf_code: player.ecf_code,
+                    full_name: player.full_name,
+                    club: player.club,
+                    std_current: player.std_current,
+                    std_year_ago: yearAgoRating,
+                    delta,
+                })
+            })
+
+            // Sort by delta — biggest movers first
+            trajectories.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+
+            res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
+            return res.status(200).json({
+                players: trajectories,
+                year_ago_date: yearAgoDate,
+                total: trajectories.length,
+            })
+        } catch (err) {
+            return res.status(500).json({ error: err.message })
+        }
+    }
+
     // Debug action: see raw U18 response
     if (action === "debug_u18") {
         try {
