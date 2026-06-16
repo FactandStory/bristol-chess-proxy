@@ -139,10 +139,12 @@ export default async function handler(req, res) {
                         ? p[idx.full]
                         : `${p[idx.fname] || ""} ${p[idx.lname] || ""}`.trim()
 
+                    const clubName = (idx.club >= 0 && p[idx.club]) ? p[idx.club] : code
+
                     players.push({
                         ecf_code: ecf,
                         full_name: full,
-                        club: idx.club >= 0 ? p[idx.club] || "" : "",
+                        club: clubName,
                         std_current: stdNum,
                     })
                 })
