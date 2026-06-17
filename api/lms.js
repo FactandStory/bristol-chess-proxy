@@ -230,6 +230,62 @@ export default async function handler(req, res) {
         }
     }
 
+    // New action: "Your Chess Year" module 4 — Bristol-wide average draw rate,
+    // for comparison against a single player's own draw rate (which is already
+    // available from player_season). Aggregates every board result across all
+    // 7 divisions. Cached separately from the per-division match cache, since
+    // this is a derived aggregate worth keeping around on its own rather than
+    // recomputing from scratch on every request even when the underlying
+    // division data is already cached.
+    if (action === "bristol_draw_rate") {
+        const cacheKey = "bristol_draw_rate"
+        const cached = CACHE[cacheKey]
+        if (cached && Date.now() - cached.ts < CACHE_TTL) {
+            res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate")
+            return res.status(200).json(cached.data)
+        }
+
+        try {
+            const divisionResults = await Promise.all(
+                DIVISIONS.map(div =>
+                    fetchLmsMatch(div)
+                        .then(data => ({ division: div, data }))
+                        .catch(() => ({ division: div, data: null }))
+                )
+            )
+
+            let totalGames = 0
+            let totalDraws = 0
+
+            divisionResults.forEach(({ data }) => {
+                if (!data || !Array.isArray(data)) return
+                data.forEach(match => {
+                    if (!match || !Array.isArray(match.data)) return
+                    match.data.forEach(board => {
+                        const result = parseResult(board.result)
+                        if (!result) return
+                        totalGames += 1
+                        if (result === "draw") totalDraws += 1
+                    })
+                })
+            })
+
+            const drawPct = totalGames > 0 ? Math.round((totalDraws / totalGames) * 1000) / 10 : null
+
+            const payload = {
+                total_games: totalGames,
+                total_draws: totalDraws,
+                draw_pct: drawPct,
+            }
+
+            CACHE[cacheKey] = { data: payload, ts: Date.now() }
+            res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate")
+            return res.status(200).json(payload)
+        } catch (err) {
+            return res.status(500).json({ error: err.message })
+        }
+    }
+
     // Default: original generic passthrough, preserved exactly as before.
     if (!org || !name || !type) {
         return res.status(400).json({ error: "Missing parameters: org, name, type required" })
