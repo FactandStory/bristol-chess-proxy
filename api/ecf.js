@@ -59,66 +59,88 @@ async function fetchECF(endpoint) {
     return { data, hit: false }
 }
 
+// Shared helper: fetch + merge all Bristol club rosters into one deduped player list.
+// Used by bristol_players, bristol_improvement, bristol_trajectory, and player_year
+// so every action sees the same player set and the same column-parsing logic.
+async function getAllBristolPlayers() {
+    const results = await Promise.all(
+        BRISTOL_CLUBS.map(code =>
+            fetchECF(`v2/club_players/${code}`)
+                .then(r => ({ ...r, clubCode: code }))
+                .catch(() => null)
+        )
+    )
+
+    const seen = new Set()
+    const players = []
+
+    results.forEach(result => {
+        if (!result || !result.data) return
+        const { data, clubCode } = result
+        const cols = data.column_names || []
+        const rows = data.players || []
+        const idx = {
+            ecf: cols.indexOf("ECF_code"),
+            full: cols.indexOf("full_name"),
+            fname: cols.indexOf("first_name"),
+            lname: cols.indexOf("last_name"),
+            club: cols.indexOf("club_name"),
+            std: cols.indexOf("std"),
+        }
+        rows.forEach(p => {
+            const ecf = idx.ecf >= 0 ? p[idx.ecf] : p[0]
+            if (!ecf || seen.has(ecf)) return
+            seen.add(ecf)
+            const std = idx.std >= 0 ? p[idx.std] : null
+            const stdNum = std ? parseInt(String(std).replace(/[^0-9]/g, "")) : NaN
+            const full = idx.full >= 0 && p[idx.full]
+                ? p[idx.full]
+                : `${p[idx.fname] || ""} ${p[idx.lname] || ""}`.trim()
+            players.push({
+                ecf_code: ecf,
+                full_name: full,
+                club: clubName(clubCode, idx.club >= 0 ? p[idx.club] : ""),
+                std_current: isNaN(stdNum) || stdNum === 0 ? null : stdNum,
+            })
+        })
+    })
+
+    return players
+}
+
+function getYearAgoDate() {
+    const now = new Date()
+    const yearAgo = new Date(now.getFullYear() - 1, now.getMonth(), 1)
+    return yearAgo.toISOString().split("T")[0]
+}
+
+function parseRevisedRating(hist) {
+    if (!hist || !hist.revised_rating) return null
+    const n = parseInt(String(hist.revised_rating).replace(/[^0-9]/g, ""))
+    return isNaN(n) || n === 0 ? null : n
+}
+
 export default async function handler(req, res) {
     res.setHeader("Access-Control-Allow-Origin", "*")
     res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS")
     res.setHeader("Access-Control-Allow-Headers", "Content-Type")
     if (req.method === "OPTIONS") return res.status(200).end()
 
-    const { endpoint, action } = req.query
+    const { endpoint, action, ecf_code } = req.query
 
     // Special action: fetch all Bristol clubs and return merged player list
     if (action === "bristol_players") {
         try {
-            const results = await Promise.all(
-                BRISTOL_CLUBS.map(code =>
-                    fetchECF(`v2/club_players/${code}`)
-                        .then(r => ({ ...r, clubCode: code }))
-                        .catch(() => null)
-                )
-            )
-
-            const seen = new Set()
-            const players = []
-
-            results.forEach(result => {
-                if (!result || !result.data) return
-                const { data, clubCode } = result
-                const cols = data.column_names || []
-                const rows = data.players || []
-
-                const idx = {
-                    ecf: cols.indexOf("ECF_code"),
-                    full: cols.indexOf("full_name"),
-                    fname: cols.indexOf("first_name"),
-                    lname: cols.indexOf("last_name"),
-                    club: cols.indexOf("club_name"),
-                    std: cols.indexOf("std"),
-                    rpd: cols.indexOf("rpd"),
-                    btz: cols.indexOf("btz"),
-                    member_no: cols.indexOf("member_no"),
-                }
-
-                rows.forEach(p => {
-                    const ecf = idx.ecf >= 0 ? p[idx.ecf] : p[0]
-                    if (!ecf || seen.has(ecf)) return
-                    seen.add(ecf)
-
-                    const full = idx.full >= 0 && p[idx.full]
-                        ? p[idx.full]
-                        : `${p[idx.fname] || ""} ${p[idx.lname] || ""}`.trim()
-
-                    players.push({
-                        ecf_code: ecf,
-                        full_name: full,
-                        club: clubName(clubCode, idx.club >= 0 ? p[idx.club] : ""),
-                        std: idx.std >= 0 ? p[idx.std] : null,
-                        rpd: idx.rpd >= 0 ? p[idx.rpd] : null,
-                        btz: idx.btz >= 0 ? p[idx.btz] : null,
-                        member_no: idx.member_no >= 0 ? p[idx.member_no] : null,
-                    })
-                })
-            })
+            const allPlayers = await getAllBristolPlayers()
+            const players = allPlayers.map(p => ({
+                ecf_code: p.ecf_code,
+                full_name: p.full_name,
+                club: p.club,
+                std: p.std_current,
+                rpd: null,
+                btz: null,
+                member_no: null,
+            }))
 
             res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
             return res.status(200).json({ players, total: players.length })
@@ -130,59 +152,8 @@ export default async function handler(req, res) {
     // Special action: get rating history for top Bristol players to calculate improvement
     if (action === "bristol_improvement") {
         try {
-            // First get all current Bristol players
-            const results = await Promise.all(
-                BRISTOL_CLUBS.map(code =>
-                    fetchECF(`v2/club_players/${code}`)
-                        .then(r => ({ ...r, clubCode: code }))
-                        .catch(() => null)
-                )
-            )
-
-            const seen = new Set()
-            const players = []
-
-            results.forEach(result => {
-                if (!result || !result.data) return
-                const { data, clubCode } = result
-                const cols = data.column_names || []
-                const rows = data.players || []
-
-                const idx = {
-                    ecf: cols.indexOf("ECF_code"),
-                    full: cols.indexOf("full_name"),
-                    fname: cols.indexOf("first_name"),
-                    lname: cols.indexOf("last_name"),
-                    club: cols.indexOf("club_name"),
-                    std: cols.indexOf("std"),
-                    member_no: cols.indexOf("member_no"),
-                }
-
-                rows.forEach(p => {
-                    const ecf = idx.ecf >= 0 ? p[idx.ecf] : p[0]
-                    if (!ecf || seen.has(ecf)) return
-                    seen.add(ecf)
-
-                    const std = idx.std >= 0 ? p[idx.std] : null
-                    if (!std) return // skip unrated
-
-                    const stdNum = parseInt(String(std).replace(/[^0-9]/g, ""))
-                    if (isNaN(stdNum) || stdNum === 0) return
-
-                    const full = idx.full >= 0 && p[idx.full]
-                        ? p[idx.full]
-                        : `${p[idx.fname] || ""} ${p[idx.lname] || ""}`.trim()
-
-                    const clubNameVal = clubName(clubCode, idx.club >= 0 ? p[idx.club] : "")
-
-                    players.push({
-                        ecf_code: ecf,
-                        full_name: full,
-                        club: clubNameVal,
-                        std_current: stdNum,
-                    })
-                })
-            })
+            const allPlayers = await getAllBristolPlayers()
+            const players = allPlayers.filter(p => p.std_current !== null)
 
             // Get previous month's date (1st of last month)
             const now = new Date()
@@ -208,12 +179,8 @@ export default async function handler(req, res) {
                 const player = top100.find(p => p.ecf_code === ecf)
                 if (!player || !prev) return
 
-                // Previous rating value
-                const prevRating = prev.revised_rating
-                    ? parseInt(String(prev.revised_rating).replace(/[^0-9]/g, ""))
-                    : null
-
-                if (!prevRating || isNaN(prevRating) || prevRating === 0) return
+                const prevRating = parseRevisedRating(prev)
+                if (!prevRating) return
 
                 const delta = player.std_current - prevRating
                 improved.push({
@@ -236,60 +203,10 @@ export default async function handler(req, res) {
     // Special action: fetch 12-month trajectory data for Bristol players across all rating bands
     if (action === "bristol_trajectory") {
         try {
-            // Get all Bristol players
-            const results = await Promise.all(
-                BRISTOL_CLUBS.map(code =>
-                    fetchECF(`v2/club_players/${code}`)
-                        .then(r => ({ ...r, clubCode: code }))
-                        .catch(() => null)
-                )
-            )
+            const allPlayers = await getAllBristolPlayers()
+            const sampled = allPlayers.filter(p => p.std_current !== null)
 
-            const seen = new Set()
-            const allRated = []
-
-            results.forEach(result => {
-                if (!result || !result.data) return
-                const { data, clubCode } = result
-                const cols = data.column_names || []
-                const rows = data.players || []
-                const idx = {
-                    ecf: cols.indexOf("ECF_code"),
-                    full: cols.indexOf("full_name"),
-                    fname: cols.indexOf("first_name"),
-                    lname: cols.indexOf("last_name"),
-                    club: cols.indexOf("club_name"),
-                    std: cols.indexOf("std"),
-                }
-                rows.forEach(p => {
-                    const ecf = idx.ecf >= 0 ? p[idx.ecf] : p[0]
-                    if (!ecf || seen.has(ecf)) return
-                    seen.add(ecf)
-                    const std = idx.std >= 0 ? p[idx.std] : null
-                    if (!std) return
-                    const stdNum = parseInt(String(std).replace(/[^0-9]/g, ""))
-                    if (isNaN(stdNum) || stdNum === 0) return
-                    const full = idx.full >= 0 && p[idx.full]
-                        ? p[idx.full]
-                        : `${p[idx.fname] || ""} ${p[idx.lname] || ""}`.trim()
-                    allRated.push({
-                        ecf_code: ecf,
-                        full_name: full,
-                        club: clubName(clubCode, idx.club >= 0 ? p[idx.club] : ""),
-                        std_current: stdNum,
-                    })
-                })
-            })
-
-            // Use ALL rated Bristol players — no sampling.
-            // ECF rate limit is 10 minutes processing/day; individual rating lookups
-            // take ~1-3ms each, so even 1000 players is ~1-3 seconds — well within budget.
-            const sampled = allRated
-
-            // Get year-ago date
-            const now = new Date()
-            const yearAgo = new Date(now.getFullYear() - 1, now.getMonth(), 1)
-            const yearAgoDate = yearAgo.toISOString().split("T")[0]
+            const yearAgoDate = getYearAgoDate()
 
             // Fetch year-ago ratings for all sampled players
             const historyResults = await Promise.all(
@@ -305,10 +222,8 @@ export default async function handler(req, res) {
             historyResults.forEach(({ ecf, hist }) => {
                 const player = sampled.find(p => p.ecf_code === ecf)
                 if (!player || !hist) return
-                const yearAgoRating = hist.revised_rating
-                    ? parseInt(String(hist.revised_rating).replace(/[^0-9]/g, ""))
-                    : null
-                if (!yearAgoRating || isNaN(yearAgoRating) || yearAgoRating === 0) return
+                const yearAgoRating = parseRevisedRating(hist)
+                if (!yearAgoRating) return
                 const delta = player.std_current - yearAgoRating
                 trajectories.push({
                     ecf_code: player.ecf_code,
@@ -329,6 +244,94 @@ export default async function handler(req, res) {
                 year_ago_date: yearAgoDate,
                 total: trajectories.length,
             })
+        } catch (err) {
+            return res.status(500).json({ error: err.message })
+        }
+    }
+
+    // Special action: "Your Chess Year" — single player's 12-month rating journey,
+    // plus the Bristol-wide average delta over the same window for comparison.
+    // Reuses the same year-ago-date convention as bristol_trajectory so the two
+    // datasets stay directly comparable. Cached per ECF code for 24h via fetchECF's
+    // own cache on the underlying v2/ratings call, plus a short-lived in-memory
+    // cache here for the merged player_year payload itself.
+    if (action === "player_year") {
+        if (!ecf_code) return res.status(400).json({ error: "Missing ecf_code parameter" })
+
+        const cacheKey = `player_year:${ecf_code}`
+        const cached = CACHE[cacheKey]
+        if (cached && Date.now() - cached.ts < CACHE_TTL) {
+            res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
+            return res.status(200).json(cached.data)
+        }
+
+        try {
+            const allPlayers = await getAllBristolPlayers()
+            const player = allPlayers.find(p => p.ecf_code === ecf_code)
+
+            if (!player) {
+                return res.status(404).json({ error: "Player not found among Bristol & Districts clubs" })
+            }
+            if (player.std_current === null) {
+                return res.status(404).json({ error: "Player has no current standard rating" })
+            }
+
+            const yearAgoDate = getYearAgoDate()
+
+            // Player's own year-ago rating, plus the full Bristol trajectory set so we
+            // can compute a Bristol-wide average delta. The Bristol set is the same
+            // shape bristol_trajectory builds, computed inline here rather than via a
+            // second HTTP round-trip, since fetchECF's own cache makes the repeated
+            // v2/ratings calls free on the 24h window.
+            const ratedPlayers = allPlayers.filter(p => p.std_current !== null)
+
+            const historyResults = await Promise.all(
+                ratedPlayers.map(p =>
+                    fetchECF(`v2/ratings/S/${p.ecf_code}/${yearAgoDate}`)
+                        .then(r => ({ ecf: p.ecf_code, hist: r.data }))
+                        .catch(() => ({ ecf: p.ecf_code, hist: null }))
+                )
+            )
+
+            let bristolDeltaSum = 0
+            let bristolDeltaCount = 0
+            let playerYearAgoRating = null
+
+            historyResults.forEach(({ ecf, hist }) => {
+                const p = ratedPlayers.find(pp => pp.ecf_code === ecf)
+                if (!p || !hist) return
+                const yearAgoRating = parseRevisedRating(hist)
+                if (!yearAgoRating) return
+                const delta = p.std_current - yearAgoRating
+                bristolDeltaSum += delta
+                bristolDeltaCount += 1
+                if (ecf === ecf_code) playerYearAgoRating = yearAgoRating
+            })
+
+            if (playerYearAgoRating === null) {
+                return res.status(404).json({ error: "No year-ago rating found for this player" })
+            }
+
+            const bristolAvgDelta = bristolDeltaCount > 0
+                ? Math.round(bristolDeltaSum / bristolDeltaCount)
+                : 0
+
+            const payload = {
+                ecf_code: player.ecf_code,
+                full_name: player.full_name,
+                club: player.club,
+                std_current: player.std_current,
+                std_year_ago: playerYearAgoRating,
+                delta: player.std_current - playerYearAgoRating,
+                bristol_avg_delta: bristolAvgDelta,
+                bristol_sample_size: bristolDeltaCount,
+                year_ago_date: yearAgoDate,
+            }
+
+            CACHE[cacheKey] = { data: payload, ts: Date.now() }
+
+            res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
+            return res.status(200).json(payload)
         } catch (err) {
             return res.status(500).json({ error: err.message })
         }
