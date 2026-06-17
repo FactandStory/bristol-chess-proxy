@@ -281,16 +281,10 @@ export default async function handler(req, res) {
                 })
             })
 
-            // Sort by rating
-            allRated.sort((a, b) => b.std_current - a.std_current)
-
-            // Sample across all rating bands — 10 per 200-point band
-            const bands = [[2000,9999],[1800,1999],[1600,1799],[1400,1599],[1200,1399],[1000,1199],[800,999],[0,799]]
-            const sampled = []
-            bands.forEach(([min, max]) => {
-                const inBand = allRated.filter(p => p.std_current >= min && p.std_current <= max).slice(0, 10)
-                sampled.push(...inBand)
-            })
+            // Use ALL rated Bristol players — no sampling.
+            // ECF rate limit is 10 minutes processing/day; individual rating lookups
+            // take ~1-3ms each, so even 1000 players is ~1-3 seconds — well within budget.
+            const sampled = allRated
 
             // Get year-ago date
             const now = new Date()
