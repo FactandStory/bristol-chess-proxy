@@ -308,13 +308,31 @@ export default async function handler(req, res) {
                 if (ecf === ecf_code) playerYearAgoRating = yearAgoRating
             })
 
-            if (playerYearAgoRating === null) {
-                return res.status(404).json({ error: "No year-ago rating found for this player" })
-            }
-
             const bristolAvgDelta = bristolDeltaCount > 0
                 ? Math.round(bristolDeltaSum / bristolDeltaCount)
                 : 0
+
+            // No year-ago Standard rating found — common for juniors/improvers who
+            // only had a Rapid/faster-format rating a year ago. Not an error: return
+            // a "new player" payload so the component can show a positive framing
+            // instead of a generic failure message.
+            if (playerYearAgoRating === null) {
+                const payload = {
+                    ecf_code: player.ecf_code,
+                    full_name: player.full_name,
+                    club: player.club,
+                    std_current: player.std_current,
+                    std_year_ago: null,
+                    delta: null,
+                    bristol_avg_delta: bristolAvgDelta,
+                    bristol_sample_size: bristolDeltaCount,
+                    year_ago_date: yearAgoDate,
+                    is_new_player: true,
+                }
+                CACHE[cacheKey] = { data: payload, ts: Date.now() }
+                res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
+                return res.status(200).json(payload)
+            }
 
             const payload = {
                 ecf_code: player.ecf_code,
@@ -326,6 +344,7 @@ export default async function handler(req, res) {
                 bristol_avg_delta: bristolAvgDelta,
                 bristol_sample_size: bristolDeltaCount,
                 year_ago_date: yearAgoDate,
+                is_new_player: false,
             }
 
             CACHE[cacheKey] = { data: payload, ts: Date.now() }
