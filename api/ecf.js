@@ -447,6 +447,17 @@ export default async function handler(req, res) {
     }
 
     // Debug action: see raw U18 response
+    // Temporary debug: see raw full rating history for a player
+    if (action === "debug_history") {
+        try {
+            if (!ecf_code) return res.status(400).json({ error: "Missing ecf_code" })
+            const { data } = await fetchECF(`v2/ratings/S/${ecf_code}`)
+            return res.status(200).json({ raw: data, type: typeof data, keys: typeof data === "object" ? Object.keys(data) : null })
+        } catch (err) {
+            return res.status(500).json({ error: err.message })
+        }
+    }
+
     if (action === "debug_u18") {
         try {
             const u18Url = "https://rating.englishchess.org.uk/v2/new/list_top_players.php?domain=S&age_limit=U18&age_class=under&age_col=age31dec&nation=ENG&gender=both&type=rating&format=json&count=500"
@@ -464,6 +475,53 @@ export default async function handler(req, res) {
                           data.players ? { keys: Object.keys(data.players[0] || {}), sample: data.players.slice(0, 3) } :
                           { keys: Object.keys(data), raw: JSON.stringify(data).slice(0, 500) }
             return res.status(200).json(sample)
+        } catch (err) {
+            return res.status(500).json({ error: err.message })
+        }
+    }
+
+    // Fetch a player's ECF game history — used by lms.js to get real game dates
+    // for chronological ordering of the season dot sequence. Returns a list of
+    // games with date, opponent name, result, and colour. Cached 24h since ECF
+    // grades are published in batches and don't change frequently.
+    if (action === "player_games") {
+        try {
+            const ecf_code = params.get("ecf_code")
+            const domain = params.get("domain") || "Standard"
+            const domainLabel = domain === "rpd" ? "Rapid" : domain === "btz" ? "Blitz" : "Standard"
+            if (!ecf_code) return res.status(400).json({ error: "Missing ecf_code" })
+
+            const cacheKey = `player_games:${ecf_code}:${domainLabel}`
+            const cached = CACHE[cacheKey]
+            if (cached && Date.now() - cached.ts < CACHE_TTL) {
+                return res.status(200).json(cached.data)
+            }
+
+            const url = `https://ecfrating.org.uk/v2/games/${domainLabel}/player/${encodeURIComponent(ecf_code)}/limit/100`
+            const response = await fetch(url, {
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                    "Accept": "application/json",
+                    "Referer": "https://ecfrating.org.uk/",
+                },
+            })
+            if (!response.ok) return res.status(response.status).json({ error: `ECF games error: ${response.status}` })
+            const raw = await response.json()
+
+            // ECF games response is an array of game objects. Normalise to a
+            // consistent shape; field names verified from ECF API v2 documentation.
+            const games = (Array.isArray(raw) ? raw : raw.games || []).map(g => ({
+                game_date: g.game_date || g.date || null,
+                opponent_no: g.opponent_no || null,
+                opponent_name: g.opponent_name || null,
+                colour: g.colour || null,         // "W" or "B"
+                result: g.result || null,          // "1", "0", "="
+                event: g.event_desc || g.event || null,
+            }))
+
+            const result = { ecf_code, domain: domainLabel, games }
+            CACHE[cacheKey] = { data: result, ts: Date.now() }
+            return res.status(200).json(result)
         } catch (err) {
             return res.status(500).json({ error: err.message })
         }
