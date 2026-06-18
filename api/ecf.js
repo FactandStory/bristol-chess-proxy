@@ -249,6 +249,62 @@ export default async function handler(req, res) {
         }
     }
 
+    // Special action: "Your Chess Year" module 2 — single player's percentile
+    // rank among all currently-rated Bristol & Districts players. Genuinely
+    // cheap: unlike player_year/bristol_trajectory, this only needs CURRENT
+    // ratings (no year-ago history fetch per player), since percentile rank
+    // is a snapshot, not a trajectory. Reuses getAllBristolPlayers(), the
+    // same cheap helper bristol_players already relies on.
+    if (action === "player_percentile") {
+        if (!ecf_code) return res.status(400).json({ error: "Missing ecf_code parameter" })
+
+        const cacheKey = `player_percentile:${ecf_code}`
+        const cached = CACHE[cacheKey]
+        if (cached && Date.now() - cached.ts < CACHE_TTL) {
+            res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
+            return res.status(200).json(cached.data)
+        }
+
+        try {
+            const allPlayers = await getAllBristolPlayers()
+            const player = allPlayers.find(p => p.ecf_code === ecf_code)
+
+            if (!player) {
+                return res.status(404).json({ error: "Player not found among Bristol & Districts clubs" })
+            }
+            if (player.std_current === null) {
+                return res.status(404).json({ error: "Player has no current standard rating" })
+            }
+
+            const ratedPlayers = allPlayers.filter(p => p.std_current !== null)
+            const allRatings = ratedPlayers.map(p => p.std_current)
+
+            const below = allRatings.filter(r => r < player.std_current).length
+            const equal = allRatings.filter(r => r === player.std_current).length
+            const total = allRatings.length
+
+            // Standard percentile-rank convention: count strictly below, plus
+            // half of any tied players, rather than putting ties entirely
+            // above or below — a player tied with others sits at the
+            // midpoint of that tied group, not artificially at its edge.
+            const percentile = Math.round(((below + equal * 0.5) / total) * 1000) / 10
+
+            const payload = {
+                ecf_code: player.ecf_code,
+                std_current: player.std_current,
+                percentile,
+                rank: total - below, // 1 = highest rated, total = lowest rated
+                total_players: total,
+            }
+
+            CACHE[cacheKey] = { data: payload, ts: Date.now() }
+            res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
+            return res.status(200).json(payload)
+        } catch (err) {
+            return res.status(500).json({ error: err.message })
+        }
+    }
+
     // Special action: "Your Chess Year" — single player's 12-month rating journey,
     // plus the Bristol-wide average delta over the same window for comparison.
     // Reuses the same year-ago-date convention as bristol_trajectory so the two
