@@ -62,7 +62,18 @@ async function fetchECF(endpoint) {
 // Shared helper: fetch + merge all Bristol club rosters into one deduped player list.
 // Used by bristol_players, bristol_improvement, bristol_trajectory, and player_year
 // so every action sees the same player set and the same column-parsing logic.
-async function getAllBristolPlayers() {
+// Fetches every Bristol & Districts club's player roster and returns a
+// de-duplicated list with whichever rating domain is requested. Domain
+// defaults to "std" (Standard) so every existing caller behaves exactly as
+// before without changes. "rpd" (Rapid) and "btz" (Blitz) read different
+// columns from the SAME already-fetched v2/club_players response — no new
+// ECF calls are needed to support multiple formats, since club_players
+// returns std/rpd/btz as parallel columns for every player already.
+// IMPORTANT: many players have no Rapid or Blitz rating at all (column is
+// null) even when they have a Standard rating — confirmed from real Bristol
+// club data, not assumed. This is expected and handled as null throughout,
+// not coerced to 0 or treated as an error.
+async function getAllBristolPlayers(domain = "std") {
     const results = await Promise.all(
         BRISTOL_CLUBS.map(code =>
             fetchECF(`v2/club_players/${code}`)
@@ -85,14 +96,14 @@ async function getAllBristolPlayers() {
             fname: cols.indexOf("first_name"),
             lname: cols.indexOf("last_name"),
             club: cols.indexOf("club_name"),
-            std: cols.indexOf("std"),
+            rating: cols.indexOf(domain), // "std", "rpd", or "btz"
         }
         rows.forEach(p => {
             const ecf = idx.ecf >= 0 ? p[idx.ecf] : p[0]
             if (!ecf || seen.has(ecf)) return
             seen.add(ecf)
-            const std = idx.std >= 0 ? p[idx.std] : null
-            const stdNum = std ? parseInt(String(std).replace(/[^0-9]/g, "")) : NaN
+            const rating = idx.rating >= 0 ? p[idx.rating] : null
+            const ratingNum = rating ? parseInt(String(rating).replace(/[^0-9]/g, "")) : NaN
             const full = idx.full >= 0 && p[idx.full]
                 ? p[idx.full]
                 : `${p[idx.fname] || ""} ${p[idx.lname] || ""}`.trim()
@@ -100,12 +111,27 @@ async function getAllBristolPlayers() {
                 ecf_code: ecf,
                 full_name: full,
                 club: clubName(clubCode, idx.club >= 0 ? p[idx.club] : ""),
-                std_current: isNaN(stdNum) || stdNum === 0 ? null : stdNum,
+                std_current: isNaN(ratingNum) || ratingNum === 0 ? null : ratingNum,
             })
         })
     })
 
     return players
+}
+
+// Maps the dashboard's format selector to both naming conventions the ECF
+// API actually uses: club_players' columns are "std"/"rpd"/"btz", while the
+// per-player ratings-history endpoint uses single letters "S"/"R"/"B" (per
+// ECF's own documented API). Both conventions are real and different — not
+// a typo — so this mapping exists once here rather than being duplicated
+// or, worse, conflated, across the multiple actions that need it.
+const RATING_DOMAINS = {
+    std: { column: "std", historyLetter: "S", label: "Standard" },
+    rpd: { column: "rpd", historyLetter: "R", label: "Rapid" },
+    btz: { column: "btz", historyLetter: "B", label: "Blitz" },
+}
+function resolveDomain(input) {
+    return RATING_DOMAINS[input] ? input : "std"
 }
 
 function getYearAgoDate() {
@@ -126,7 +152,7 @@ export default async function handler(req, res) {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type")
     if (req.method === "OPTIONS") return res.status(200).end()
 
-    const { endpoint, action, ecf_code } = req.query
+    const { endpoint, action, ecf_code, domain: domainParam } = req.query
 
     // Special action: fetch all Bristol clubs and return merged player list
     if (action === "bristol_players") {
@@ -258,7 +284,8 @@ export default async function handler(req, res) {
     if (action === "player_percentile") {
         if (!ecf_code) return res.status(400).json({ error: "Missing ecf_code parameter" })
 
-        const cacheKey = `player_percentile:${ecf_code}`
+        const domain = resolveDomain(domainParam)
+        const cacheKey = `player_percentile:${ecf_code}:${domain}`
         const cached = CACHE[cacheKey]
         if (cached && Date.now() - cached.ts < CACHE_TTL) {
             res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
@@ -266,14 +293,14 @@ export default async function handler(req, res) {
         }
 
         try {
-            const allPlayers = await getAllBristolPlayers()
+            const allPlayers = await getAllBristolPlayers(RATING_DOMAINS[domain].column)
             const player = allPlayers.find(p => p.ecf_code === ecf_code)
 
             if (!player) {
                 return res.status(404).json({ error: "Player not found among Bristol & Districts clubs" })
             }
             if (player.std_current === null) {
-                return res.status(404).json({ error: "Player has no current standard rating" })
+                return res.status(404).json({ error: `Player has no current ${RATING_DOMAINS[domain].label} rating` })
             }
 
             const ratedPlayers = allPlayers.filter(p => p.std_current !== null)
@@ -295,6 +322,8 @@ export default async function handler(req, res) {
                 percentile,
                 rank: total - below, // 1 = highest rated, total = lowest rated
                 total_players: total,
+                domain,
+                domain_label: RATING_DOMAINS[domain].label,
             }
 
             CACHE[cacheKey] = { data: payload, ts: Date.now() }
@@ -314,7 +343,8 @@ export default async function handler(req, res) {
     if (action === "player_year") {
         if (!ecf_code) return res.status(400).json({ error: "Missing ecf_code parameter" })
 
-        const cacheKey = `player_year:${ecf_code}`
+        const domain = resolveDomain(domainParam)
+        const cacheKey = `player_year:${ecf_code}:${domain}`
         const cached = CACHE[cacheKey]
         if (cached && Date.now() - cached.ts < CACHE_TTL) {
             res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
@@ -322,14 +352,14 @@ export default async function handler(req, res) {
         }
 
         try {
-            const allPlayers = await getAllBristolPlayers()
+            const allPlayers = await getAllBristolPlayers(RATING_DOMAINS[domain].column)
             const player = allPlayers.find(p => p.ecf_code === ecf_code)
 
             if (!player) {
                 return res.status(404).json({ error: "Player not found among Bristol & Districts clubs" })
             }
             if (player.std_current === null) {
-                return res.status(404).json({ error: "Player has no current standard rating" })
+                return res.status(404).json({ error: `Player has no current ${RATING_DOMAINS[domain].label} rating` })
             }
 
             const yearAgoDate = getYearAgoDate()
@@ -343,7 +373,7 @@ export default async function handler(req, res) {
 
             const historyResults = await Promise.all(
                 ratedPlayers.map(p =>
-                    fetchECF(`v2/ratings/S/${p.ecf_code}/${yearAgoDate}`)
+                    fetchECF(`v2/ratings/${RATING_DOMAINS[domain].historyLetter}/${p.ecf_code}/${yearAgoDate}`)
                         .then(r => ({ ecf: p.ecf_code, hist: r.data }))
                         .catch(() => ({ ecf: p.ecf_code, hist: null }))
                 )
@@ -384,6 +414,8 @@ export default async function handler(req, res) {
                     bristol_sample_size: bristolDeltaCount,
                     year_ago_date: yearAgoDate,
                     is_new_player: true,
+                    domain,
+                    domain_label: RATING_DOMAINS[domain].label,
                 }
                 CACHE[cacheKey] = { data: payload, ts: Date.now() }
                 res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
@@ -401,6 +433,8 @@ export default async function handler(req, res) {
                 bristol_sample_size: bristolDeltaCount,
                 year_ago_date: yearAgoDate,
                 is_new_player: false,
+                domain,
+                domain_label: RATING_DOMAINS[domain].label,
             }
 
             CACHE[cacheKey] = { data: payload, ts: Date.now() }
