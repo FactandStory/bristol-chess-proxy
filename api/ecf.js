@@ -518,7 +518,7 @@ export default async function handler(req, res) {
 
             // Use fetchECF (rating.englishchess.org.uk) which Vercel can reach.
             // Endpoint: v2/games/S/{ecf_code} — returns game history array.
-            const { data: raw_pg } = await fetchECF(`v2/games/${histLetter_pg}/${ecf_code_pg}`)
+            const { data: raw_pg } = await fetchECF(`v2/games/${domainLabel_pg}/player/${ecf_code_pg}/limit/100`)
 
             const games_pg = (Array.isArray(raw_pg) ? raw_pg : raw_pg?.games || []).map(g => ({
                 game_date: g.game_date || g.date || null,
