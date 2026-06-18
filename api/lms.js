@@ -230,7 +230,9 @@ export default async function handler(req, res) {
             // normalised opponent surname + outcome to assign real dates.
             // Unmatched games keep timestamp=0 and sort to the front.
             const ecf_code = req.query.ecf_code
+            let ecfDebug = { attempted: false, error: null, gamesFound: 0, matched: 0 }
             if (ecf_code && games.length > 0) {
+                ecfDebug.attempted = true
                 try {
                     const ecfUrl = `https://ecfrating.org.uk/v2/games/Standard/player/${encodeURIComponent(ecf_code)}/limit/100`
                     const ecfResp = await fetch(ecfUrl, {
@@ -240,16 +242,14 @@ export default async function handler(req, res) {
                             "Referer": "https://ecfrating.org.uk/",
                         },
                     })
+                    ecfDebug.status = ecfResp.status
                     if (ecfResp.ok) {
                         const ecfRaw = await ecfResp.json()
                         const ecfGames = Array.isArray(ecfRaw) ? ecfRaw : (ecfRaw.games || [])
+                        ecfDebug.gamesFound = ecfGames.length
+                        ecfDebug.sampleKeys = ecfGames[0] ? Object.keys(ecfGames[0]) : []
+                        ecfDebug.sampleGame = ecfGames[0] || null
 
-                        // Build a lookup: normalised opponent surname + result → timestamp
-                        // ECF result: "1"=win, "0"=loss, "="=draw
-                        // Only include league games (filter out congress/rapid events where possible)
-                        // Extract surname correctly from both name formats:
-                        // LMS: "Surname, Firstname" → surname is before the comma
-                        // ECF: "Firstname Surname"  → surname is the last word
                         const extractSurname = name => {
                             if (!name) return ""
                             const s = name.trim()
@@ -259,8 +259,6 @@ export default async function handler(req, res) {
                         }
                         const resultToOutcome = r => r === "1" ? "win" : r === "0" ? "loss" : r === "=" ? "draw" : null
 
-                        // Build a map from (opponent_surname:outcome) → sorted dates
-                        // Using an array because a player can appear twice (home+away)
                         const dateMap = {}
                         ecfGames.forEach(g => {
                             if (!g.game_date || !g.opponent_name) return
@@ -268,10 +266,10 @@ export default async function handler(req, res) {
                             if (!dateMap[key]) dateMap[key] = []
                             dateMap[key].push(new Date(g.game_date).getTime())
                         })
-                        // Sort each bucket oldest first so we can assign in order
                         Object.values(dateMap).forEach(arr => arr.sort((a, b) => a - b))
                         const usedCount = {}
 
+                        let matchCount = 0
                         games = games.map(g => {
                             const key = extractSurname(g.opponent) + ":" + g.outcome
                             const bucket = dateMap[key]
@@ -279,12 +277,15 @@ export default async function handler(req, res) {
                             const idx = usedCount[key] || 0
                             const ts = bucket[idx] || bucket[bucket.length - 1]
                             usedCount[key] = idx + 1
+                            matchCount++
                             return { ...g, timestamp: ts }
                         })
+                        ecfDebug.matched = matchCount
+                    } else {
+                        ecfDebug.error = `HTTP ${ecfResp.status}`
                     }
                 } catch (e) {
-                    // ECF date enrichment failed — fall back to round-number ordering
-                    // Games with timestamp=0 will sort to front, which is acceptable
+                    ecfDebug.error = e.message
                 }
             }
 
@@ -306,6 +307,7 @@ export default async function handler(req, res) {
                 score_pct: scorePct,
                 matched_name_variants: confidence === "low" ? Array.from(looseNameVariants) : [],
                 games: games.sort((a, b) => a.timestamp - b.timestamp),
+                ecf_debug: ecfDebug,
             }
 
             res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate")
