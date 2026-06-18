@@ -229,7 +229,7 @@ export default async function handler(req, res) {
             // ECF games endpoint returns real game_date values. We join by
             // normalised opponent surname + outcome to assign real dates.
             // Unmatched games keep timestamp=0 and sort to the front.
-            const ecf_code = params.get("ecf_code")
+            const ecf_code = req.query.ecf_code
             if (ecf_code && games.length > 0) {
                 try {
                     const ecfUrl = `https://ecfrating.org.uk/v2/games/Standard/player/${encodeURIComponent(ecf_code)}/limit/100`
