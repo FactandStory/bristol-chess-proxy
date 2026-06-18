@@ -110,22 +110,6 @@ export default async function handler(req, res) {
     // against the supplied full_name, aggregates W/D/L, and reports a
     // confidence level on the name match rather than presenting a guess as
     // certain.
-    if (action === "debug_titles") {
-        try {
-            const allData = await Promise.all(DIVISIONS.map(div => fetchLmsMatch(div)))
-            const titles = []
-            allData.forEach((data, i) => {
-                if (!Array.isArray(data)) return
-                data.slice(0, 3).forEach(match => {
-                    if (match?.title) titles.push({ div: DIVISIONS[i], title: match.title, round: parseRoundFromTitle(match.title) })
-                })
-            })
-            return res.status(200).json({ titles })
-        } catch (err) {
-            return res.status(500).json({ error: err.message })
-        }
-    }
-
     if (action === "player_season") {
         if (!full_name) return res.status(400).json({ error: "Missing full_name parameter" })
 
@@ -238,6 +222,70 @@ export default async function handler(req, res) {
             } else if (looseGames.length > 0) {
                 confidence = "low"
                 games = looseGames
+            }
+
+            // Enrich timestamps from ECF game history if ecf_code supplied.
+            // The LMS API returns all matches as "Round 1" — no reliable date.
+            // ECF games endpoint returns real game_date values. We join by
+            // normalised opponent surname + outcome to assign real dates.
+            // Unmatched games keep timestamp=0 and sort to the front.
+            const ecf_code = params.get("ecf_code")
+            if (ecf_code && games.length > 0) {
+                try {
+                    const ecfUrl = `https://ecfrating.org.uk/v2/games/Standard/player/${encodeURIComponent(ecf_code)}/limit/100`
+                    const ecfResp = await fetch(ecfUrl, {
+                        headers: {
+                            "User-Agent": "Mozilla/5.0",
+                            "Accept": "application/json",
+                            "Referer": "https://ecfrating.org.uk/",
+                        },
+                    })
+                    if (ecfResp.ok) {
+                        const ecfRaw = await ecfResp.json()
+                        const ecfGames = Array.isArray(ecfRaw) ? ecfRaw : (ecfRaw.games || [])
+
+                        // Build a lookup: normalised opponent surname + result → timestamp
+                        // ECF result: "1"=win, "0"=loss, "="=draw
+                        // Only include league games (filter out congress/rapid events where possible)
+                        // Extract surname correctly from both name formats:
+                        // LMS: "Surname, Firstname" → surname is before the comma
+                        // ECF: "Firstname Surname"  → surname is the last word
+                        const extractSurname = name => {
+                            if (!name) return ""
+                            const s = name.trim()
+                            if (s.includes(",")) return s.split(",")[0].trim().toLowerCase()
+                            const parts = s.split(/\s+/)
+                            return parts[parts.length - 1].toLowerCase()
+                        }
+                        const resultToOutcome = r => r === "1" ? "win" : r === "0" ? "loss" : r === "=" ? "draw" : null
+
+                        // Build a map from (opponent_surname:outcome) → sorted dates
+                        // Using an array because a player can appear twice (home+away)
+                        const dateMap = {}
+                        ecfGames.forEach(g => {
+                            if (!g.game_date || !g.opponent_name) return
+                            const key = extractSurname(g.opponent_name) + ":" + resultToOutcome(g.result)
+                            if (!dateMap[key]) dateMap[key] = []
+                            dateMap[key].push(new Date(g.game_date).getTime())
+                        })
+                        // Sort each bucket oldest first so we can assign in order
+                        Object.values(dateMap).forEach(arr => arr.sort((a, b) => a - b))
+                        const usedCount = {}
+
+                        games = games.map(g => {
+                            const key = extractSurname(g.opponent) + ":" + g.outcome
+                            const bucket = dateMap[key]
+                            if (!bucket || bucket.length === 0) return g
+                            const idx = usedCount[key] || 0
+                            const ts = bucket[idx] || bucket[bucket.length - 1]
+                            usedCount[key] = idx + 1
+                            return { ...g, timestamp: ts }
+                        })
+                    }
+                } catch (e) {
+                    // ECF date enrichment failed — fall back to round-number ordering
+                    // Games with timestamp=0 will sort to front, which is acceptable
+                }
             }
 
             const wins = games.filter(g => g.outcome === "win").length
