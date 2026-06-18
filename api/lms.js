@@ -110,6 +110,26 @@ export default async function handler(req, res) {
     // against the supplied full_name, aggregates W/D/L, and reports a
     // confidence level on the name match rather than presenting a guess as
     // certain.
+    // Temporary debug: expose title/header from first match to find where
+    // the date actually lives. Remove once confirmed.
+    if (action === "debug_match_date") {
+        try {
+            const data = await fetchLmsMatch(DIVISIONS[4]) // Division 5
+            if (!data || !Array.isArray(data) || !data[0]) {
+                return res.status(200).json({ error: "No data", raw: typeof data })
+            }
+            const first = data[0]
+            return res.status(200).json({
+                title: first.title,
+                header: first.header,
+                totals: first.totals,
+                keys: Object.keys(first),
+            })
+        } catch (err) {
+            return res.status(500).json({ error: err.message })
+        }
+    }
+
     if (action === "player_season") {
         if (!full_name) return res.status(400).json({ error: "Missing full_name parameter" })
 
