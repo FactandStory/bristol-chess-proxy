@@ -105,25 +105,6 @@ export default async function handler(req, res) {
     // Debug action: returns the raw keys of the first board object from Division 1,
     // so we can see exactly what field names the LMS API uses. Remove once the
     // board number / colour field name is confirmed and the colour module is built.
-    if (action === "debug_board") {
-        try {
-            const data = await fetchLmsMatch(DIVISIONS[0])
-            if (!data || !Array.isArray(data) || !data[0]?.data?.[0]) {
-                return res.status(200).json({ error: "No match data found", raw: data })
-            }
-            const sampleBoard = data[0].data[0]
-            const sampleMatch = { totals: data[0].totals }
-            return res.status(200).json({
-                board_keys: Object.keys(sampleBoard),
-                board_sample: sampleBoard,
-                match_keys: Object.keys(data[0]),
-                match_totals: sampleMatch.totals,
-            })
-        } catch (err) {
-            return res.status(500).json({ error: err.message })
-        }
-    }
-
     // New action: "Your Chess Year" module 3 — season scoreboard for a single
     // player. Searches every board row across all 7 divisions for name matches
     // against the supplied full_name, aggregates W/D/L, and reports a
@@ -185,20 +166,20 @@ export default async function handler(req, res) {
                         const opponentRating = parseRating(playerIsHome ? board.arating : board.hrating)
                         const ownRating = parseRating(playerIsHome ? board.hrating : board.arating)
 
-                        // board number confirmed present in LMS API via third-party
-                        // library inspection (github.com/ojb500/ecf-lms-api). Field
-                        // may be "board", "board_no", or similar — storing raw value
-                        // so you can verify the exact field name against a real response
-                        // before the colour derivation is relied upon by the UI.
-                        const boardNo = board.board ?? board.board_no ?? board.boardNo ?? null
-                        // Colour convention: in English league chess, away team
-                        // typically has White on odd boards. This may vary by league —
-                        // verify against a known game before shipping the colour module.
-                        const colour = boardNo !== null
-                            ? (!playerIsHome && boardNo % 2 === 1) || (playerIsHome && boardNo % 2 === 0)
-                                ? "white"
-                                : "black"
-                            : null
+                        // Board field confirmed as "board" containing a formatted string
+                        // like "1 ( B )" or "2 ( W )" — board number and home player's
+                        // colour explicitly encoded. Away player gets the opposite colour.
+                        // Verified from real Bristol & Districts LMS response.
+                        const parseBoardField = (raw) => {
+                            if (!raw || typeof raw !== "string") return { boardNo: null, colour: null }
+                            const m = raw.match(/(\d+)\s*\(\s*([WB])\s*\)/)
+                            if (!m) return { boardNo: null, colour: null }
+                            return { boardNo: parseInt(m[1]), colour: m[2] === "W" ? "white" : "black" }
+                        }
+                        const { boardNo, colour: homeColour } = parseBoardField(board.board)
+                        const colour = homeColour === null ? null
+                            : playerIsHome ? homeColour
+                            : homeColour === "white" ? "black" : "white"
 
                         const gameRecord = {
                             division,
