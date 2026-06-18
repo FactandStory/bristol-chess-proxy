@@ -1,5 +1,4 @@
 // /api/og.js — Bristol Chess Hub OG image generation
-// Uses dynamic import() for @vercel/og to avoid ESM/CJS conflicts.
 
 const W = 1200
 const H = 630
@@ -12,7 +11,7 @@ const COLORS = {
 }
 
 function el(type, style, children) {
-    return { type, props: { style, children: Array.isArray(children) ? children : children } }
+    return { type, props: { style, children } }
 }
 
 function whereYouStandCard({ name, percentile, rank, total, domainLabel }) {
@@ -42,8 +41,7 @@ function whereYouStandCard({ name, percentile, rank, total, domainLabel }) {
             name || "Bristol Player"),
         el("div", {
             fontSize: 116, fontWeight: 700, color: COLORS.white,
-            fontFamily: "'Courier New', monospace",
-            letterSpacing: -2, lineHeight: 1, marginBottom: 10,
+            fontFamily: "monospace", letterSpacing: -2, lineHeight: 1, marginBottom: 10,
         }, `${percentile}%`),
         el("div", { fontSize: 20, color: COLORS.offWhite, marginBottom: 44 },
             `of rated Bristol & Districts players (${domainLabel})`),
@@ -67,12 +65,14 @@ module.exports = async function handler(req, res) {
 
     const url = new URL(req.url, `https://${req.headers.host}`)
     const p = url.searchParams
-    const module_ = p.get("module") || "where_you_stand"
+    const moduleName = p.get("module") || "where_you_stand"
 
     res.setHeader("Access-Control-Allow-Origin", "*")
 
+    if (req.method === "OPTIONS") { res.status(200).end(); return }
+
     try {
-        if (module_ === "where_you_stand") {
+        if (moduleName === "where_you_stand") {
             let percentile = p.get("percentile")
             let rank = p.get("rank")
             let total = p.get("total")
@@ -93,18 +93,23 @@ module.exports = async function handler(req, res) {
             }
 
             const element = whereYouStandCard({ name, percentile, rank, total, domainLabel })
+
+            // ImageResponse is a Web API Response — stream its body directly
             const imageResponse = new ImageResponse(element, { width: W, height: H })
+            const arrayBuffer = await imageResponse.arrayBuffer()
+            const buffer = Buffer.from(arrayBuffer)
 
             res.setHeader("Content-Type", "image/png")
+            res.setHeader("Content-Length", buffer.length)
             res.setHeader("Cache-Control", "public, max-age=3600")
-            const buf = await imageResponse.arrayBuffer()
-            res.send(Buffer.from(buf))
+            res.status(200).end(buffer)
             return
         }
 
-        res.status(400).send(`Unknown module: ${module_}`)
+        res.status(400).send(`Unknown module: ${moduleName}`)
 
     } catch (err) {
-        res.status(500).send(`OG error: ${err.message}`)
+        console.error("OG error:", err)
+        res.status(500).send(`OG error: ${err.message}\n${err.stack}`)
     }
 }
