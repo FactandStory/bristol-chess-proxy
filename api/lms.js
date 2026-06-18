@@ -259,12 +259,14 @@ export default async function handler(req, res) {
                             const parts = s.split(/\s+/)
                             return parts[parts.length - 1].toLowerCase()
                         }
-                        const resultToOutcome = r => r === "1" ? "win" : r === "0" ? "loss" : r === "=" ? "draw" : null
 
+                        // ECF result field is always null in this API endpoint —
+                        // match by surname only. Both LMS and ECF use "Surname, Firstname"
+                        // so extractSurname works identically for both sides.
                         const dateMap = {}
                         ecfGames.forEach(g => {
                             if (!g.game_date || !g.opponent_name) return
-                            const key = extractSurname(g.opponent_name) + ":" + resultToOutcome(g.result)
+                            const key = extractSurname(g.opponent_name)
                             if (!dateMap[key]) dateMap[key] = []
                             dateMap[key].push(new Date(g.game_date).getTime())
                         })
@@ -273,11 +275,11 @@ export default async function handler(req, res) {
 
                         let matchCount = 0
                         games = games.map(g => {
-                            const key = extractSurname(g.opponent) + ":" + g.outcome
+                            const key = extractSurname(g.opponent)
                             const bucket = dateMap[key]
                             if (!bucket || bucket.length === 0) return g
                             const idx = usedCount[key] || 0
-                            const ts = bucket[idx] || bucket[bucket.length - 1]
+                            const ts = bucket[idx] ?? bucket[bucket.length - 1]
                             usedCount[key] = idx + 1
                             matchCount++
                             return { ...g, timestamp: ts }
