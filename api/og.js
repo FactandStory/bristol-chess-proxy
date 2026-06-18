@@ -1,9 +1,8 @@
 // /api/og.js — Bristol Chess Hub OG image generation
-// Requires @vercel/og in package.json dependencies.
-// Uses React element objects (not JSX) — no Next.js required.
-// Only flexbox + inline styles supported by Satori.
+// Uses dynamic import() for @vercel/og to avoid ESM/CJS conflicts.
 
-import { ImageResponse } from "@vercel/og"
+const W = 1200
+const H = 630
 
 const COLORS = {
     white: "#FFFFFF",
@@ -12,11 +11,8 @@ const COLORS = {
     purple: "#5A237A",
 }
 
-const W = 1200
-const H = 630
-
 function el(type, style, children) {
-    return { type, props: { style, children } }
+    return { type, props: { style, children: Array.isArray(children) ? children : children } }
 }
 
 function whereYouStandCard({ name, percentile, rank, total, domainLabel }) {
@@ -32,10 +28,8 @@ function whereYouStandCard({ name, percentile, rank, total, domainLabel }) {
         fontFamily: "Arial, sans-serif",
     }, [
         el("div", {
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 44,
+            display: "flex", justifyContent: "space-between",
+            alignItems: "center", marginBottom: 44,
         }, [
             el("div", { fontSize: 18, fontWeight: 700, color: COLORS.offWhite, letterSpacing: 3 },
                 "BRISTOL & DISTRICTS CHESS HUB"),
@@ -68,19 +62,17 @@ function whereYouStandCard({ name, percentile, rank, total, domainLabel }) {
     ])
 }
 
-export default async function handler(req) {
-    const headers = {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
-    }
-    if (req.method === "OPTIONS") return new Response("", { headers })
+module.exports = async function handler(req, res) {
+    const { ImageResponse } = await import("@vercel/og")
 
-    const url = new URL(req.url)
+    const url = new URL(req.url, `https://${req.headers.host}`)
     const p = url.searchParams
-    const module = p.get("module") || "where_you_stand"
+    const module_ = p.get("module") || "where_you_stand"
+
+    res.setHeader("Access-Control-Allow-Origin", "*")
 
     try {
-        if (module === "where_you_stand") {
+        if (module_ === "where_you_stand") {
             let percentile = p.get("percentile")
             let rank = p.get("rank")
             let total = p.get("total")
@@ -90,26 +82,29 @@ export default async function handler(req) {
 
             if (!percentile) {
                 const ecf_code = p.get("ecf_code")
-                if (!ecf_code) return new Response("Missing ecf_code or percentile", { status: 400, headers })
+                if (!ecf_code) { res.status(400).send("Missing ecf_code or percentile"); return }
                 const data = await fetch(
                     `https://bristol-chess-proxy.vercel.app/api/ecf?action=player_percentile&ecf_code=${encodeURIComponent(ecf_code)}&domain=${domain}`
                 ).then(r => r.json())
-                if (data.error) return new Response(data.error, { status: 404, headers })
+                if (data.error) { res.status(404).send(data.error); return }
                 percentile = String(data.percentile)
                 rank = String(data.rank)
                 total = String(data.total_players)
             }
 
             const element = whereYouStandCard({ name, percentile, rank, total, domainLabel })
-            return new ImageResponse(element, {
-                width: W, height: H,
-                headers: { ...headers, "Cache-Control": "public, max-age=3600" },
-            })
+            const imageResponse = new ImageResponse(element, { width: W, height: H })
+
+            res.setHeader("Content-Type", "image/png")
+            res.setHeader("Cache-Control", "public, max-age=3600")
+            const buf = await imageResponse.arrayBuffer()
+            res.send(Buffer.from(buf))
+            return
         }
 
-        return new Response(`Unknown module: ${module}`, { status: 400, headers })
+        res.status(400).send(`Unknown module: ${module_}`)
 
     } catch (err) {
-        return new Response(`OG error: ${err.message}`, { status: 500, headers })
+        res.status(500).send(`OG error: ${err.message}`)
     }
 }
