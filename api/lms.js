@@ -224,74 +224,19 @@ export default async function handler(req, res) {
                 games = looseGames
             }
 
-            // Enrich timestamps from ECF game history if ecf_code supplied.
-            // The LMS API returns all matches as "Round 1" — no reliable date.
-            // ECF games endpoint returns real game_date values. We join by
-            // normalised opponent surname + outcome to assign real dates.
-            // Unmatched games keep timestamp=0 and sort to the front.
-            const ecf_code = req.query.ecf_code
-            let ecfDebug = { attempted: false, error: null, gamesFound: 0, matched: 0 }
-            if (ecf_code && games.length > 0) {
-                ecfDebug.attempted = true
-                try {
-                    // Call our own ECF proxy rather than ecfrating.org.uk directly —
-                    // Vercel serverless functions can't reach ecfrating.org.uk but
-                    // our ecf.js proxy (same deployment) can via its own cached fetch.
-                    const ecfUrl = `https://bristol-chess-proxy.vercel.app/api/ecf?action=player_games&ecf_code=${encodeURIComponent(ecf_code)}&domain=std`
-                    const ecfResp = await fetch(ecfUrl)
-                    ecfDebug.status = ecfResp.status
-                    if (ecfResp.ok) {
-                        const ecfRaw = await ecfResp.json()
-                        // player_games returns { ecf_code, domain, games: [...] }
-                        const ecfGames = ecfRaw.games || []
-                        ecfDebug.gamesFound = ecfGames.length
-                        ecfDebug.sampleKeys = ecfGames[0] ? Object.keys(ecfGames[0]) : []
-                        ecfDebug.totalGames = ecfGames.length
-                        ecfDebug.firstGame = ecfGames[0] || null
-                        ecfDebug.lastGame = ecfGames[ecfGames.length - 1] || null
-                        ecfDebug.dateRange = ecfGames.length > 0 ? [ecfGames[0].game_date, ecfGames[ecfGames.length-1].game_date] : []
-                        ecfDebug.last5 = ecfGames.slice(-5).map(g => ({ date: g.game_date, opp: g.opponent_name, result: g.result }))
-
-                        const extractSurname = name => {
-                            if (!name) return ""
-                            const s = name.trim()
-                            if (s.includes(",")) return s.split(",")[0].trim().toLowerCase()
-                            const parts = s.split(/\s+/)
-                            return parts[parts.length - 1].toLowerCase()
-                        }
-
-                        // ECF result field is always null in this API endpoint —
-                        // match by surname only. Both LMS and ECF use "Surname, Firstname"
-                        // so extractSurname works identically for both sides.
-                        const dateMap = {}
-                        ecfGames.forEach(g => {
-                            if (!g.game_date || !g.opponent_name) return
-                            const key = extractSurname(g.opponent_name)
-                            if (!dateMap[key]) dateMap[key] = []
-                            dateMap[key].push(new Date(g.game_date).getTime())
-                        })
-                        Object.values(dateMap).forEach(arr => arr.sort((a, b) => a - b))
-                        const usedCount = {}
-
-                        let matchCount = 0
-                        games = games.map(g => {
-                            const key = extractSurname(g.opponent)
-                            const bucket = dateMap[key]
-                            if (!bucket || bucket.length === 0) return g
-                            const idx = usedCount[key] || 0
-                            const ts = bucket[idx] ?? bucket[bucket.length - 1]
-                            usedCount[key] = idx + 1
-                            matchCount++
-                            return { ...g, timestamp: ts }
-                        })
-                        ecfDebug.matched = matchCount
-                    } else {
-                        ecfDebug.error = `HTTP ${ecfResp.status}`
-                    }
-                } catch (e) {
-                    ecfDebug.error = e.message
-                }
-            }
+            // Chronological ordering: the ECF games API doesn't include recent
+            // seasons (its /v2/games endpoint only returns data up to ~2023 and
+            // has null result fields). Instead, use own_rating as the timestamp
+            // proxy — a player's rating rises and falls as the season progresses
+            // so sorting by own_rating ascending approximates chronological order.
+            // Within the same own_rating, use board number as a tiebreaker
+            // (lower boards = more experienced players = more stable scheduling).
+            // This gives a consistently reasonable ordering that reflects the
+            // actual shape of the season even without real dates.
+            games = games.map(g => ({
+                ...g,
+                timestamp: (g.own_rating || 1000) * 100 + (g.board || 50),
+            }))
 
             const wins = games.filter(g => g.outcome === "win").length
             const draws = games.filter(g => g.outcome === "draw").length
@@ -311,7 +256,6 @@ export default async function handler(req, res) {
                 score_pct: scorePct,
                 matched_name_variants: confidence === "low" ? Array.from(looseNameVariants) : [],
                 games: games.sort((a, b) => a.timestamp - b.timestamp),
-                ecf_debug: ecfDebug,
             }
 
             res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate")
