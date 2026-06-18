@@ -502,43 +502,6 @@ export default async function handler(req, res) {
     // for chronological ordering of the season dot sequence. Returns a list of
     // games with date, opponent name, result, and colour. Cached 24h since ECF
     // grades are published in batches and don't change frequently.
-    if (action === "player_games") {
-        try {
-            const ecf_code_pg = req.query.ecf_code
-            const domain_pg = req.query.domain || "std"
-            const domainLabel_pg = domain_pg === "rpd" ? "Rapid" : domain_pg === "btz" ? "Blitz" : "Standard"
-            const histLetter_pg = domain_pg === "rpd" ? "R" : domain_pg === "btz" ? "B" : "S"
-            if (!ecf_code_pg) return res.status(400).json({ error: "Missing ecf_code" })
-
-            const cacheKey_pg = `player_games:${ecf_code_pg}:${domainLabel_pg}`
-            const cached_pg = CACHE[cacheKey_pg]
-            if (cached_pg && Date.now() - cached_pg.ts < CACHE_TTL) {
-                return res.status(200).json(cached_pg.data)
-            }
-
-            // Use fetchECF (rating.englishchess.org.uk) which Vercel can reach.
-            // Limit 500 ensures we capture full history for active players.
-            // ECF returns oldest-first; 100 games was too few for active players.
-            const { data: raw_pg } = await fetchECF(`v2/games/${domainLabel_pg}/player/${ecf_code_pg}/limit/500`)
-
-            const games_pg = (Array.isArray(raw_pg) ? raw_pg : raw_pg?.games || [])
-                .map(g => ({
-                    game_date: g.game_date,
-                    opponent_no: g.opponent_no || null,
-                    opponent_name: g.opponent_name || null,
-                    colour: g.colour || null,
-                    result: g.result || null,
-                    event: g.event_desc || g.event || null,
-                }))
-
-            const result_pg = { ecf_code: ecf_code_pg, domain: domainLabel_pg, games: games_pg }
-            CACHE[cacheKey_pg] = { data: result_pg, ts: Date.now() }
-            return res.status(200).json(result_pg)
-        } catch (err) {
-            return res.status(500).json({ error: err.message })
-        }
-    }
-
     // Special action: fetch Bristol juniors by cross-referencing national U18 list
     if (action === "bristol_juniors") {
         try {
