@@ -517,17 +517,28 @@ export default async function handler(req, res) {
             }
 
             // Use fetchECF (rating.englishchess.org.uk) which Vercel can reach.
-            // Endpoint: v2/games/S/{ecf_code} — returns game history array.
-            const { data: raw_pg } = await fetchECF(`v2/games/${domainLabel_pg}/player/${ecf_code_pg}/limit/100`)
+            // Limit 500 ensures we capture full history for active players.
+            // ECF returns oldest-first; 100 games was too few for active players.
+            const { data: raw_pg } = await fetchECF(`v2/games/${domainLabel_pg}/player/${ecf_code_pg}/limit/500`)
 
-            const games_pg = (Array.isArray(raw_pg) ? raw_pg : raw_pg?.games || []).map(g => ({
-                game_date: g.game_date || g.date || null,
-                opponent_no: g.opponent_no || null,
-                opponent_name: g.opponent_name || null,
-                colour: g.colour || null,
-                result: g.result || null,
-                event: g.event_desc || g.event || null,
-            }))
+            // Current season: Sep 2025 onwards
+            const seasonStart = new Date("2025-09-01").getTime()
+
+            const games_pg = (Array.isArray(raw_pg) ? raw_pg : raw_pg?.games || [])
+                .filter(g => {
+                    if (!g.game_date) return false
+                    // Only include current season games with a graded result
+                    const gameTs = new Date(g.game_date).getTime()
+                    return gameTs >= seasonStart && g.result !== null
+                })
+                .map(g => ({
+                    game_date: g.game_date,
+                    opponent_no: g.opponent_no || null,
+                    opponent_name: g.opponent_name || null,
+                    colour: g.colour || null,
+                    result: g.result || null,
+                    event: g.event_desc || g.event || null,
+                }))
 
             const result_pg = { ecf_code: ecf_code_pg, domain: domainLabel_pg, games: games_pg }
             CACHE[cacheKey_pg] = { data: result_pg, ts: Date.now() }
