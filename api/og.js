@@ -47,7 +47,7 @@ function pieceWatermark(pieceKeys) {
         flexDirection: "column",
         alignItems: "flex-end",
         gap: count > 1 ? 8 : 0,
-        opacity: 0.15,
+        opacity: 0.08,
     }, pieceKeys.map(k => img(PIECE[k], { width: size, height: size })))
 }
 
