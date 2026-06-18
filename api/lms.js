@@ -83,15 +83,15 @@ function parseRating(val) {
 
 // Extract a match-level date from the totals array, same convention as
 // RecentResults.tsx's parseDate / date-pattern matching.
-function parseMatchDate(totals) {
-    if (!Array.isArray(totals)) return 0
-    for (const t of totals) {
-        if (typeof t === "string" && /\d{2}\/\d{2}\/\d{4}/.test(t)) {
-            const [d, m, y] = t.trim().match(/\d{2}\/\d{2}\/\d{4}/)[0].split("/")
-            return new Date(`${y}-${m}-${d}`).getTime()
-        }
-    }
-    return 0
+// Extract round number from match title for chronological ordering.
+// The LMS match API does not include match dates in its response — the title
+// field contains "... Round N" which is the reliable chronological proxy.
+// Round number is consistent within a division; cross-division ordering is
+// approximate but vastly better than the previous all-zeros fallback.
+function parseRoundFromTitle(title) {
+    if (!title || typeof title !== "string") return 0
+    const m = title.match(/Round\s+(\d+)/i)
+    return m ? parseInt(m[1]) : 0
 }
 
 export default async function handler(req, res) {
@@ -110,26 +110,6 @@ export default async function handler(req, res) {
     // against the supplied full_name, aggregates W/D/L, and reports a
     // confidence level on the name match rather than presenting a guess as
     // certain.
-    // Temporary debug: expose title/header from first match to find where
-    // the date actually lives. Remove once confirmed.
-    if (action === "debug_match_date") {
-        try {
-            const data = await fetchLmsMatch(DIVISIONS[4]) // Division 5
-            if (!data || !Array.isArray(data) || !data[0]) {
-                return res.status(200).json({ error: "No data", raw: typeof data })
-            }
-            const first = data[0]
-            return res.status(200).json({
-                title: first.title,
-                header: first.header,
-                totals: first.totals,
-                keys: Object.keys(first),
-            })
-        } catch (err) {
-            return res.status(500).json({ error: err.message })
-        }
-    }
-
     if (action === "player_season") {
         if (!full_name) return res.status(400).json({ error: "Missing full_name parameter" })
 
@@ -159,7 +139,7 @@ export default async function handler(req, res) {
 
                 data.forEach(match => {
                     if (!match || !Array.isArray(match.data)) return
-                    const matchTs = parseMatchDate(match.totals || [])
+                    const matchTs = parseRoundFromTitle(match.title)
 
                     match.data.forEach(board => {
                         const hname = normaliseName(board.hname)
