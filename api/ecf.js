@@ -422,6 +422,34 @@ export default async function handler(req, res) {
                 return res.status(200).json(payload)
             }
 
+            // Fetch monthly rating snapshots for the player's own sparkline.
+            // 13 date points (1st of each month for past 12 months + current)
+            // run in parallel and are cached 24h — fast and cheap.
+            const monthlyDates = []
+            const today = new Date()
+            for (let i = 12; i >= 0; i--) {
+                const d = new Date(today)
+                d.setMonth(d.getMonth() - i)
+                d.setDate(1)
+                monthlyDates.push(d.toISOString().split("T")[0])
+            }
+
+            const monthlyRatings = await Promise.all(
+                monthlyDates.map(date =>
+                    fetchECF(`v2/ratings/${RATING_DOMAINS[domain].historyLetter}/${ecf_code}/${date}`)
+                        .then(r => ({ date, rating: parseRevisedRating(r.data) }))
+                        .catch(() => ({ date, rating: null }))
+                )
+            )
+
+            // Filter to points where a rating exists, deduplicate consecutive
+            // identical values (ECF only publishes when a game is graded, so
+            // many months will repeat the previous value — we keep unique
+            // turning points for a cleaner sparkline).
+            const historyPoints = monthlyRatings
+                .filter(p => p.rating !== null)
+                .filter((p, i, arr) => i === 0 || p.rating !== arr[i - 1].rating)
+
             const payload = {
                 ecf_code: player.ecf_code,
                 full_name: player.full_name,
@@ -435,6 +463,7 @@ export default async function handler(req, res) {
                 is_new_player: false,
                 domain,
                 domain_label: RATING_DOMAINS[domain].label,
+                history: historyPoints,  // [{date, rating}, ...] for sparkline
             }
 
             CACHE[cacheKey] = { data: payload, ts: Date.now() }
@@ -447,17 +476,6 @@ export default async function handler(req, res) {
     }
 
     // Debug action: see raw U18 response
-    // Temporary debug: see raw full rating history for a player
-    if (action === "debug_history") {
-        try {
-            if (!ecf_code) return res.status(400).json({ error: "Missing ecf_code" })
-            const { data } = await fetchECF(`v2/ratings/S/${ecf_code}`)
-            return res.status(200).json({ raw: data, type: typeof data, keys: typeof data === "object" ? Object.keys(data) : null })
-        } catch (err) {
-            return res.status(500).json({ error: err.message })
-        }
-    }
-
     if (action === "debug_u18") {
         try {
             const u18Url = "https://rating.englishchess.org.uk/v2/new/list_top_players.php?domain=S&age_limit=U18&age_class=under&age_col=age31dec&nation=ENG&gender=both&type=rating&format=json&count=500"
