@@ -234,18 +234,16 @@ export default async function handler(req, res) {
             if (ecf_code && games.length > 0) {
                 ecfDebug.attempted = true
                 try {
-                    const ecfUrl = `https://ecfrating.org.uk/v2/games/Standard/player/${encodeURIComponent(ecf_code)}/limit/100`
-                    const ecfResp = await fetch(ecfUrl, {
-                        headers: {
-                            "User-Agent": "Mozilla/5.0",
-                            "Accept": "application/json",
-                            "Referer": "https://ecfrating.org.uk/",
-                        },
-                    })
+                    // Call our own ECF proxy rather than ecfrating.org.uk directly —
+                    // Vercel serverless functions can't reach ecfrating.org.uk but
+                    // our ecf.js proxy (same deployment) can via its own cached fetch.
+                    const ecfUrl = `https://bristol-chess-proxy.vercel.app/api/ecf?action=player_games&ecf_code=${encodeURIComponent(ecf_code)}&domain=std`
+                    const ecfResp = await fetch(ecfUrl)
                     ecfDebug.status = ecfResp.status
                     if (ecfResp.ok) {
                         const ecfRaw = await ecfResp.json()
-                        const ecfGames = Array.isArray(ecfRaw) ? ecfRaw : (ecfRaw.games || [])
+                        // player_games returns { ecf_code, domain, games: [...] }
+                        const ecfGames = ecfRaw.games || []
                         ecfDebug.gamesFound = ecfGames.length
                         ecfDebug.sampleKeys = ecfGames[0] ? Object.keys(ecfGames[0]) : []
                         ecfDebug.sampleGame = ecfGames[0] || null
