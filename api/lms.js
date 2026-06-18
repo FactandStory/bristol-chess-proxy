@@ -163,6 +163,21 @@ export default async function handler(req, res) {
                         const opponentRating = parseRating(playerIsHome ? board.arating : board.hrating)
                         const ownRating = parseRating(playerIsHome ? board.hrating : board.arating)
 
+                        // board number confirmed present in LMS API via third-party
+                        // library inspection (github.com/ojb500/ecf-lms-api). Field
+                        // may be "board", "board_no", or similar — storing raw value
+                        // so you can verify the exact field name against a real response
+                        // before the colour derivation is relied upon by the UI.
+                        const boardNo = board.board ?? board.board_no ?? board.boardNo ?? null
+                        // Colour convention: in English league chess, away team
+                        // typically has White on odd boards. This may vary by league —
+                        // verify against a known game before shipping the colour module.
+                        const colour = boardNo !== null
+                            ? (!playerIsHome && boardNo % 2 === 1) || (playerIsHome && boardNo % 2 === 0)
+                                ? "white"
+                                : "black"
+                            : null
+
                         const gameRecord = {
                             division,
                             timestamp: matchTs,
@@ -170,6 +185,9 @@ export default async function handler(req, res) {
                             opponent: opponentName || "",
                             opponent_rating: opponentRating,
                             own_rating: ownRating,
+                            board: boardNo,
+                            colour,
+                            is_home: playerIsHome,
                         }
 
                         if (isHome || isAway) {
