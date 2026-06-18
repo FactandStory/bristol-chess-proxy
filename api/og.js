@@ -1,9 +1,9 @@
 // /api/og.js — Bristol Chess Hub OG image generation
-// Self-contained: imports @vercel/og via CDN, no package.json changes needed.
-// Uses React element objects (not JSX) since this is not a Next.js project.
-// Only flexbox + inline styles — CSS variables, SVG, grid not supported by Satori.
+// Requires @vercel/og in package.json dependencies.
+// Uses React element objects (not JSX) — no Next.js required.
+// Only flexbox + inline styles supported by Satori.
 
-const OG_URL = "https://esm.sh/@vercel/og@0.6.2"
+import { ImageResponse } from "@vercel/og"
 
 const COLORS = {
     white: "#FFFFFF",
@@ -15,16 +15,13 @@ const COLORS = {
 const W = 1200
 const H = 630
 
-// Build the Where You Stand card as a React element object tree
+function el(type, style, children) {
+    return { type, props: { style, children } }
+}
+
 function whereYouStandCard({ name, percentile, rank, total, domainLabel }) {
     const pct = parseFloat(percentile)
     const barFillW = Math.round((pct / 100) * 680)
-
-    // Helper to make element objects less verbose
-    const el = (type, style, children) => ({
-        type,
-        props: { style, children },
-    })
 
     return el("div", {
         width: W, height: H,
@@ -34,7 +31,6 @@ function whereYouStandCard({ name, percentile, rank, total, domainLabel }) {
         padding: "60px 80px",
         fontFamily: "Arial, sans-serif",
     }, [
-        // Top bar: branding left, feature name right
         el("div", {
             display: "flex",
             justifyContent: "space-between",
@@ -46,48 +42,27 @@ function whereYouStandCard({ name, percentile, rank, total, domainLabel }) {
             el("div", { fontSize: 14, color: COLORS.muted, letterSpacing: 2 },
                 "YOUR CHESS YEAR"),
         ]),
-
-        // Module label
         el("div", { fontSize: 16, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 12 },
             "WHERE YOU STAND"),
-
-        // Player name
         el("div", { fontSize: 30, fontWeight: 700, color: COLORS.white, marginBottom: 32 },
             name || "Bristol Player"),
-
-        // Big percentile number
         el("div", {
-            fontSize: 116,
-            fontWeight: 700,
-            color: COLORS.white,
+            fontSize: 116, fontWeight: 700, color: COLORS.white,
             fontFamily: "'Courier New', monospace",
-            letterSpacing: -2,
-            lineHeight: 1,
-            marginBottom: 10,
+            letterSpacing: -2, lineHeight: 1, marginBottom: 10,
         }, `${percentile}%`),
-
-        // Sub-label
         el("div", { fontSize: 20, color: COLORS.offWhite, marginBottom: 44 },
             `of rated Bristol & Districts players (${domainLabel})`),
-
-        // Bar track + fill
         el("div", {
-            width: 680,
-            height: 12,
+            width: 680, height: 12,
             backgroundColor: "rgba(255,255,255,0.15)",
-            borderRadius: 6,
-            display: "flex",
-            alignItems: "stretch",
+            borderRadius: 6, display: "flex", alignItems: "stretch",
         }, [
             el("div", {
-                width: barFillW,
-                height: 12,
-                backgroundColor: COLORS.white,
-                borderRadius: 6,
+                width: barFillW, height: 12,
+                backgroundColor: COLORS.white, borderRadius: 6,
             }, []),
         ]),
-
-        // Rank context
         el("div", { fontSize: 18, color: COLORS.muted, marginTop: 20 },
             `Ranked #${rank} of ${total} rated players`),
     ])
@@ -99,14 +74,6 @@ export default async function handler(req) {
         "Access-Control-Allow-Methods": "GET, OPTIONS",
     }
     if (req.method === "OPTIONS") return new Response("", { headers })
-
-    let ImageResponse
-    try {
-        const mod = await import(OG_URL)
-        ImageResponse = mod.ImageResponse
-    } catch (err) {
-        return new Response(`Failed to load @vercel/og: ${err.message}`, { status: 500, headers })
-    }
 
     const url = new URL(req.url)
     const p = url.searchParams
@@ -121,7 +88,6 @@ export default async function handler(req) {
             const domain = p.get("domain") || "std"
             const domainLabel = domain === "rpd" ? "Rapid" : domain === "btz" ? "Blitz" : "Standard"
 
-            // Fetch live if not pre-supplied
             if (!percentile) {
                 const ecf_code = p.get("ecf_code")
                 if (!ecf_code) return new Response("Missing ecf_code or percentile", { status: 400, headers })
@@ -135,11 +101,9 @@ export default async function handler(req) {
             }
 
             const element = whereYouStandCard({ name, percentile, rank, total, domainLabel })
-
             return new ImageResponse(element, {
-                width: W,
-                height: H,
-                headers: { ...headers, "Cache-Control": "public, max-age=3600, s-maxage=3600" },
+                width: W, height: H,
+                headers: { ...headers, "Cache-Control": "public, max-age=3600" },
             })
         }
 
