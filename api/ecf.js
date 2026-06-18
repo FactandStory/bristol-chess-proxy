@@ -504,42 +504,34 @@ export default async function handler(req, res) {
     // grades are published in batches and don't change frequently.
     if (action === "player_games") {
         try {
-            const ecf_code = params.get("ecf_code")
-            const domain = params.get("domain") || "Standard"
-            const domainLabel = domain === "rpd" ? "Rapid" : domain === "btz" ? "Blitz" : "Standard"
-            if (!ecf_code) return res.status(400).json({ error: "Missing ecf_code" })
+            const ecf_code_pg = req.query.ecf_code
+            const domain_pg = req.query.domain || "std"
+            const domainLabel_pg = domain_pg === "rpd" ? "Rapid" : domain_pg === "btz" ? "Blitz" : "Standard"
+            const histLetter_pg = domain_pg === "rpd" ? "R" : domain_pg === "btz" ? "B" : "S"
+            if (!ecf_code_pg) return res.status(400).json({ error: "Missing ecf_code" })
 
-            const cacheKey = `player_games:${ecf_code}:${domainLabel}`
-            const cached = CACHE[cacheKey]
-            if (cached && Date.now() - cached.ts < CACHE_TTL) {
-                return res.status(200).json(cached.data)
+            const cacheKey_pg = `player_games:${ecf_code_pg}:${domainLabel_pg}`
+            const cached_pg = CACHE[cacheKey_pg]
+            if (cached_pg && Date.now() - cached_pg.ts < CACHE_TTL) {
+                return res.status(200).json(cached_pg.data)
             }
 
-            const url = `https://ecfrating.org.uk/v2/games/${domainLabel}/player/${encodeURIComponent(ecf_code)}/limit/100`
-            const response = await fetch(url, {
-                headers: {
-                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-                    "Accept": "application/json",
-                    "Referer": "https://ecfrating.org.uk/",
-                },
-            })
-            if (!response.ok) return res.status(response.status).json({ error: `ECF games error: ${response.status}` })
-            const raw = await response.json()
+            // Use fetchECF (rating.englishchess.org.uk) which Vercel can reach.
+            // Endpoint: v2/games/S/{ecf_code} — returns game history array.
+            const { data: raw_pg } = await fetchECF(`v2/games/${histLetter_pg}/${ecf_code_pg}`)
 
-            // ECF games response is an array of game objects. Normalise to a
-            // consistent shape; field names verified from ECF API v2 documentation.
-            const games = (Array.isArray(raw) ? raw : raw.games || []).map(g => ({
+            const games_pg = (Array.isArray(raw_pg) ? raw_pg : raw_pg?.games || []).map(g => ({
                 game_date: g.game_date || g.date || null,
                 opponent_no: g.opponent_no || null,
                 opponent_name: g.opponent_name || null,
-                colour: g.colour || null,         // "W" or "B"
-                result: g.result || null,          // "1", "0", "="
+                colour: g.colour || null,
+                result: g.result || null,
                 event: g.event_desc || g.event || null,
             }))
 
-            const result = { ecf_code, domain: domainLabel, games }
-            CACHE[cacheKey] = { data: result, ts: Date.now() }
-            return res.status(200).json(result)
+            const result_pg = { ecf_code: ecf_code_pg, domain: domainLabel_pg, games: games_pg }
+            CACHE[cacheKey_pg] = { data: result_pg, ts: Date.now() }
+            return res.status(200).json(result_pg)
         } catch (err) {
             return res.status(500).json({ error: err.message })
         }
