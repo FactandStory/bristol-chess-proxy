@@ -102,6 +102,28 @@ export default async function handler(req, res) {
 
     const { org, name, type, action, full_name } = req.query
 
+    // Debug action: returns the raw keys of the first board object from Division 1,
+    // so we can see exactly what field names the LMS API uses. Remove once the
+    // board number / colour field name is confirmed and the colour module is built.
+    if (action === "debug_board") {
+        try {
+            const data = await fetchLmsMatch(DIVISIONS[0])
+            if (!data || !Array.isArray(data) || !data[0]?.data?.[0]) {
+                return res.status(200).json({ error: "No match data found", raw: data })
+            }
+            const sampleBoard = data[0].data[0]
+            const sampleMatch = { totals: data[0].totals }
+            return res.status(200).json({
+                board_keys: Object.keys(sampleBoard),
+                board_sample: sampleBoard,
+                match_keys: Object.keys(data[0]),
+                match_totals: sampleMatch.totals,
+            })
+        } catch (err) {
+            return res.status(500).json({ error: err.message })
+        }
+    }
+
     // New action: "Your Chess Year" module 3 — season scoreboard for a single
     // player. Searches every board row across all 7 divisions for name matches
     // against the supplied full_name, aggregates W/D/L, and reports a
