@@ -110,6 +110,22 @@ export default async function handler(req, res) {
     // against the supplied full_name, aggregates W/D/L, and reports a
     // confidence level on the name match rather than presenting a guess as
     // certain.
+    if (action === "debug_titles") {
+        try {
+            const allData = await Promise.all(DIVISIONS.map(div => fetchLmsMatch(div)))
+            const titles = []
+            allData.forEach((data, i) => {
+                if (!Array.isArray(data)) return
+                data.slice(0, 3).forEach(match => {
+                    if (match?.title) titles.push({ div: DIVISIONS[i], title: match.title, round: parseRoundFromTitle(match.title) })
+                })
+            })
+            return res.status(200).json({ titles })
+        } catch (err) {
+            return res.status(500).json({ error: err.message })
+        }
+    }
+
     if (action === "player_season") {
         if (!full_name) return res.status(400).json({ error: "Missing full_name parameter" })
 
