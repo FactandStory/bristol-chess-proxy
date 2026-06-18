@@ -246,7 +246,9 @@ export default async function handler(req, res) {
                         const ecfGames = ecfRaw.games || []
                         ecfDebug.gamesFound = ecfGames.length
                         ecfDebug.sampleKeys = ecfGames[0] ? Object.keys(ecfGames[0]) : []
-                        ecfDebug.sampleGame = ecfGames[0] || null
+                        ecfDebug.firstGame = ecfGames[0] || null
+                        ecfDebug.lastGame = ecfGames[ecfGames.length - 1] || null
+                        ecfDebug.dateRange = ecfGames.length > 0 ? [ecfGames[0].game_date, ecfGames[ecfGames.length-1].game_date] : []
 
                         const extractSurname = name => {
                             if (!name) return ""
