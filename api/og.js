@@ -24,6 +24,10 @@ const COLORS = {
     green: "#1E7A4A",
     blue: "#1F6FA3",
     teal: "#1A3D3D",
+    black: "#171717",
+    gold: "#8A6D1F",
+    brown: "#5A3B1A",
+    indigo: "#2A1A3D",
 }
 
 function txt(style, text) {
@@ -164,6 +168,95 @@ function inGoodCompanyCard({ name, drawRate, gmName, gmDrawRate }) {
     ])
 }
 
+function giantKillingCard({ name, opponent, ownRating, oppRating, differential }) {
+    const oppName = opponent.includes(",") ? opponent.split(",").reverse().join(" ").trim() : opponent
+    return cardShell(COLORS.black, ["knight"], [
+        txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 16 }, "GIANT KILLING · BRISTOL & DISTRICTS"),
+        txt({ fontSize: 26, fontWeight: 700, color: COLORS.white, marginBottom: 8 }, displayName(name)),
+        txt({ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: 3, marginBottom: 4 }, "BIGGEST UPSET — RATING DIFFERENTIAL"),
+        txt({ fontSize: 108, fontWeight: 700, color: "#6FE0A0", fontFamily: "monospace", letterSpacing: -2, lineHeight: 1, marginBottom: 16 }, "+" + differential),
+        box({ gap: 32, alignItems: "flex-start" }, [
+            box({ flexDirection: "column", gap: 4 }, [
+                txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "THEIR RATING"),
+                txt({ fontSize: 36, fontWeight: 700, color: COLORS.white, fontFamily: "monospace" }, String(oppRating)),
+                txt({ fontSize: 16, color: "rgba(255,255,255,0.6)" }, oppName),
+            ]),
+            box({ flexDirection: "column", gap: 4 }, [
+                txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "YOUR RATING"),
+                txt({ fontSize: 36, fontWeight: 700, color: "rgba(255,255,255,0.5)", fontFamily: "monospace" }, String(ownRating)),
+            ]),
+        ]),
+    ])
+}
+
+function toughestOpponentCard({ name, opponent, oppRating, ownRating, outcome }) {
+    const oppName = opponent.includes(",") ? opponent.split(",").reverse().join(" ").trim() : opponent
+    const outcomeColor = outcome === "win" ? "#6FE0A0" : outcome === "draw" ? "rgba(255,255,255,0.7)" : "#FF9B8E"
+    const outcomeLabel = outcome === "win" ? "AND WON" : outcome === "draw" ? "AND DREW" : "THEIR TOUGHEST TEST"
+    return cardShell(COLORS.black, ["knight"], [
+        txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 16 }, "TOUGHEST OPPONENT · BRISTOL & DISTRICTS"),
+        txt({ fontSize: 26, fontWeight: 700, color: COLORS.white, marginBottom: 20 }, displayName(name)),
+        txt({ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: 3, marginBottom: 4 }, "HIGHEST-RATED OPPONENT FACED"),
+        txt({ fontSize: 108, fontWeight: 700, color: COLORS.white, fontFamily: "monospace", letterSpacing: -2, lineHeight: 1, marginBottom: 8 }, String(oppRating)),
+        txt({ fontSize: 20, fontWeight: 700, color: "rgba(255,255,255,0.7)", marginBottom: 4 }, oppName),
+        txt({ fontSize: 18, fontWeight: 700, color: outcomeColor }, outcomeLabel),
+    ])
+}
+
+function yourPeopleCard({ name, totalGames, uniqueOpponents, wins, losses }) {
+    return cardShell(COLORS.gold, ["pawn"], [
+        txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 16 }, "YOUR PEOPLE · BRISTOL & DISTRICTS"),
+        txt({ fontSize: 26, fontWeight: 700, color: COLORS.white, marginBottom: 20 }, displayName(name)),
+        txt({ fontSize: 108, fontWeight: 700, color: COLORS.white, fontFamily: "monospace", letterSpacing: -2, lineHeight: 1, marginBottom: 4 }, String(uniqueOpponents)),
+        txt({ fontSize: 18, color: COLORS.offWhite, marginBottom: 28 }, "people sat across a board from you this season"),
+        box({ gap: 40, alignItems: "flex-end" }, [
+            box({ flexDirection: "column", gap: 4 }, [
+                txt({ fontSize: 48, fontWeight: 700, color: "#6FE0A0", fontFamily: "monospace", lineHeight: 1 }, String(wins)),
+                txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "WINS"),
+            ]),
+            box({ flexDirection: "column", gap: 4 }, [
+                txt({ fontSize: 48, fontWeight: 700, color: "#FF9B8E", fontFamily: "monospace", lineHeight: 1 }, String(losses)),
+                txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "LOSSES"),
+            ]),
+            box({ flexDirection: "column", gap: 4 }, [
+                txt({ fontSize: 48, fontWeight: 700, color: "rgba(255,255,255,0.6)", fontFamily: "monospace", lineHeight: 1 }, String(totalGames)),
+                txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "GAMES"),
+            ]),
+        ]),
+    ])
+}
+
+function colourStrengthCard({ name, whitePct, blackPct, stronger }) {
+    const strongerColor = stronger === "White" ? "#F0F0F0" : stronger === "Black" ? "#E8A800" : COLORS.offWhite
+    return cardShell(COLORS.brown, ["knight"], [
+        txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 16 }, "WHITE & BLACK · BRISTOL & DISTRICTS"),
+        txt({ fontSize: 26, fontWeight: 700, color: COLORS.white, marginBottom: 24 }, displayName(name)),
+        box({ gap: 56, alignItems: "flex-end", marginBottom: 24 }, [
+            box({ flexDirection: "column", gap: 8 }, [
+                txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "WHITE PIECES"),
+                txt({ fontSize: 88, fontWeight: 700, color: "#F0F0F0", fontFamily: "monospace", lineHeight: 1 }, whitePct + "%"),
+            ]),
+            box({ flexDirection: "column", gap: 8 }, [
+                txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "BLACK PIECES"),
+                txt({ fontSize: 88, fontWeight: 700, color: "#E8A800", fontFamily: "monospace", lineHeight: 1 }, blackPct + "%"),
+            ]),
+        ]),
+        txt({ fontSize: 18, color: stronger !== "neither" ? strongerColor : COLORS.muted },
+            stronger !== "neither" ? "Stronger with the " + stronger + " pieces" : "Equal strength with both colours"),
+    ])
+}
+
+function degreesOfSeparationCard({ name, degrees, playerCount }) {
+    return cardShell(COLORS.indigo, ["knight"], [
+        txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 16 }, "DEGREES OF SEPARATION · BRISTOL CHESS"),
+        txt({ fontSize: 26, fontWeight: 700, color: COLORS.white, marginBottom: 20 }, displayName(name)),
+        txt({ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: 3, marginBottom: 4 }, "DEGREES FROM GM MICHAEL ADAMS"),
+        txt({ fontSize: 108, fontWeight: 700, color: COLORS.white, fontFamily: "monospace", letterSpacing: -2, lineHeight: 1, marginBottom: 12 }, String(degrees)),
+        txt({ fontSize: 18, color: COLORS.offWhite, marginBottom: 4 }, "9× British Champion · England #2"),
+        txt({ fontSize: 14, color: COLORS.muted }, "via " + playerCount + " Bristol & Districts players"),
+    ])
+}
+
 module.exports = async function handler(req, res) {
     const { ImageResponse } = await import("@vercel/og")
     const url = new URL(req.url, "https://" + req.headers.host)
@@ -191,11 +284,13 @@ module.exports = async function handler(req, res) {
             element = whereYouStandCard({ name, percentile, rank, total, domainLabel })
 
         } else if (moduleName === "rating_journey") {
+            const currentRating = parseInt(p.get("currentRating") || p.get("rating") || "1500")
+            const yearAgoRating = parseInt(p.get("yearAgoRating") || p.get("year_ago") || "1500")
             element = ratingJourneyCard({
                 name: p.get("name") || "Bristol Player",
-                currentRating: parseInt(p.get("rating") || "1500"),
-                yearAgoRating: parseInt(p.get("year_ago") || "1500"),
-                change: parseInt(p.get("rating") || "1500") - parseInt(p.get("year_ago") || "1500"),
+                currentRating,
+                yearAgoRating,
+                change: parseInt(p.get("change") || String(currentRating - yearAgoRating)),
                 domainLabel: p.get("domain") === "rpd" ? "Rapid" : p.get("domain") === "btz" ? "Blitz" : "Standard",
             })
 
@@ -206,7 +301,7 @@ module.exports = async function handler(req, res) {
                 wins: parseInt(p.get("wins") || "0"),
                 draws: parseInt(p.get("draws") || "0"),
                 losses: parseInt(p.get("losses") || "0"),
-                scorePct: p.get("score_pct") || "0",
+                scorePct: p.get("scorePct") || p.get("score_pct") || "0",
             })
 
         } else if (moduleName === "in_good_company") {
@@ -215,6 +310,48 @@ module.exports = async function handler(req, res) {
                 drawRate: parseInt(p.get("draw_rate") || "0"),
                 gmName: p.get("gm_name") || "Bobby Fischer",
                 gmDrawRate: parseInt(p.get("gm_draw_rate") || "29"),
+            })
+
+        } else if (moduleName === "giant_killing") {
+            element = giantKillingCard({
+                name: p.get("name") || "Bristol Player",
+                opponent: p.get("opponent") || "Unknown",
+                ownRating: parseInt(p.get("own_rating") || "1500"),
+                oppRating: parseInt(p.get("opp_rating") || "1500"),
+                differential: parseInt(p.get("differential") || "0"),
+            })
+
+        } else if (moduleName === "toughest_opponent") {
+            element = toughestOpponentCard({
+                name: p.get("name") || "Bristol Player",
+                opponent: p.get("opponent") || "Unknown",
+                oppRating: parseInt(p.get("opp_rating") || "1500"),
+                ownRating: parseInt(p.get("own_rating") || "1500"),
+                outcome: p.get("outcome") || "loss",
+            })
+
+        } else if (moduleName === "your_people") {
+            element = yourPeopleCard({
+                name: p.get("name") || "Bristol Player",
+                totalGames: parseInt(p.get("total_games") || "0"),
+                uniqueOpponents: parseInt(p.get("unique_opponents") || "0"),
+                wins: parseInt(p.get("wins") || "0"),
+                losses: parseInt(p.get("losses") || "0"),
+            })
+
+        } else if (moduleName === "colour_strength") {
+            element = colourStrengthCard({
+                name: p.get("name") || "Bristol Player",
+                whitePct: parseInt(p.get("white_pct") || "50"),
+                blackPct: parseInt(p.get("black_pct") || "50"),
+                stronger: p.get("stronger") || "neither",
+            })
+
+        } else if (moduleName === "degrees_of_separation") {
+            element = degreesOfSeparationCard({
+                name: p.get("name") || "Bristol Player",
+                degrees: parseInt(p.get("degrees") || "0"),
+                playerCount: parseInt(p.get("player_count") || "0"),
             })
 
         } else {
