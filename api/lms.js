@@ -321,6 +321,130 @@ export default async function handler(req, res) {
         }
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // ACTION: degrees_of_separation
+    // Builds a graph from all Bristol & Districts league matches this season,
+    // runs BFS to find shortest path to GM Michael Adams via pre-verified
+    // bridge connections.
+    //
+    // Bridge chain (verified from public records):
+    // Any Bristol player → Aron Saunders (Downend, NM 2302)
+    //   via Bristol league (Saunders plays D&F teams in Bristol leagues)
+    // Saunders → IM Matthew Wadsworth (2253 FIDE)
+    //   both played UK Open Blitz SW Qualifier, Stoke Gifford, 28 Sep 2024
+    //   (chess-results.com/tnr1012748) — Saunders seed 16, Wadsworth seed 4
+    // Wadsworth → GM Michael Adams (9x British Champion)
+    //   both played British Championship 2024, Hull — same 9-round Swiss section
+    //   (theweekinchess.com/chessnews/events/110th-british-chess-championships-2024)
+    // ──────────────────────────────────────────────────────────────────────────
+    if (action === "degrees_of_separation") {
+        const searchName = req.query.full_name
+        if (!searchName) return res.status(400).json({ error: "Missing full_name parameter" })
+
+        try {
+            const divisionResults = await Promise.all(
+                DIVISIONS.map(div =>
+                    fetchLmsMatch(div)
+                        .then(data => ({ division: div, data }))
+                        .catch(() => ({ division: div, data: null }))
+                )
+            )
+
+            // Build adjacency list from all board rows: {name → [{name, event}]}
+            const graph = {}
+            const addEdge = (a, b, event) => {
+                if (!a || !b || a.trim() === b.trim()) return
+                const clean = s => s.trim()
+                const A = clean(a), B = clean(b)
+                if (!graph[A]) graph[A] = []
+                if (!graph[B]) graph[B] = []
+                if (!graph[A].find(e => e.name === B)) graph[A].push({ name: B, event })
+                if (!graph[B].find(e => e.name === A)) graph[B].push({ name: A, event })
+            }
+
+            divisionResults.forEach(({ division, data }) => {
+                if (!data || !Array.isArray(data)) return
+                data.forEach(match => {
+                    if (!match || !Array.isArray(match.data)) return
+                    match.data.forEach(board => {
+                        const hname = board.hname?.trim()
+                        const aname = board.aname?.trim()
+                        if (hname && aname) {
+                            addEdge(hname, aname, `Bristol & Districts ${division} 2024/25`)
+                        }
+                    })
+                })
+            })
+
+            // Pre-verified bridge edges
+            addEdge("Saunders, Aron", "Wadsworth, Matthew J", "UK Open Blitz SW Qualifier 2024")
+            addEdge("Wadsworth, Matthew J", "Adams, Michael", "British Championship 2024 (Hull)")
+            // Also add Grieve path as alternative
+            addEdge("Saunders, Aron", "Grieve, Harry", "UK Open Blitz SW Qualifier 2024")
+            addEdge("Grieve, Harry", "Adams, Michael", "British Championship 2024 (Hull)")
+
+            const playerCount = Object.keys(graph).length
+            const target = "Adams, Michael"
+            const start = searchName
+
+            if (!graph[start]) {
+                return res.status(200).json({
+                    full_name: searchName,
+                    found: false,
+                    error: "Player not found in this season's Bristol & Districts league data",
+                    player_count: playerCount,
+                })
+            }
+
+            // BFS — finds shortest path
+            const visited = new Set([start])
+            const queue = [[start, [start]]]
+            let path = null
+
+            bfsLoop: while (queue.length > 0) {
+                const [node, currentPath] = queue.shift()
+                for (const { name: neighbour, event } of (graph[node] || [])) {
+                    if (!visited.has(neighbour)) {
+                        visited.add(neighbour)
+                        const newPath = [...currentPath, event, neighbour]
+                        if (neighbour === target) { path = newPath; break bfsLoop }
+                        queue.push([neighbour, newPath])
+                    }
+                }
+            }
+
+            if (!path) {
+                return res.status(200).json({
+                    full_name: searchName,
+                    found: false,
+                    error: "No path found to Michael Adams — try a different player",
+                    player_count: playerCount,
+                })
+            }
+
+            const degrees = Math.floor((path.length - 1) / 2)
+
+            // Format as steps: [{player, via}]
+            const steps = []
+            for (let i = 0; i < path.length; i += 2) {
+                steps.push({ player: path[i], via: path[i + 1] || null })
+            }
+
+            res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate")
+            return res.status(200).json({
+                full_name: searchName,
+                found: true,
+                degrees,
+                target,
+                steps,
+                player_count: playerCount,
+            })
+
+        } catch (err) {
+            return res.status(500).json({ error: err.message })
+        }
+    }
+
     // Default: original generic passthrough, preserved exactly as before.
     if (!org || !name || !type) {
         return res.status(400).json({ error: "Missing parameters: org, name, type required" })
