@@ -102,7 +102,7 @@ function topBar(moduleTag) {
             box({ width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.mint }, []),
             txt({ fontSize: 22, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: "0.18em", fontFamily: "Arial, sans-serif" }, "BRISTOL CHESS"),
         ]),
-        txt({ fontSize: 20, fontWeight: 600, color: "rgba(255,255,255,0.25)", letterSpacing: "0.14em", fontFamily: "Arial, sans-serif" }, "YOUR CHESS YEAR · " + moduleTag),
+        txt({ fontSize: 20, fontWeight: 600, color: "rgba(255,255,255,0.25)", letterSpacing: "0.14em", fontFamily: "Arial, sans-serif" }, "MY CHESS YEAR · " + moduleTag),
     ])
 }
 
@@ -130,10 +130,10 @@ function whereYouStandCard({ name, percentile, rank, total }) {
     return cardBase(COLORS.black, COLORS.mint, KNIGHT_URI, 680, "RANK", [
         topBar("WHERE YOU STAND"),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
-            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "YOU'RE RATED HIGHER THAN"),
+            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "I'M RATED HIGHER THAN"),
             txt({ fontSize: 186, fontWeight: 900, color: COLORS.mint, lineHeight: 0.85, letterSpacing: "-0.05em" }, pct + "%"),
-            txt({ fontSize: 22, color: "rgba(255,255,255,0.45)", marginTop: 12 }, "of rated Bristol & Districts players"),
-            txt({ fontSize: 16, color: "rgba(255,255,255,0.25)", marginTop: 8 }, "Ranked #" + rank + " of " + total),
+            txt({ fontSize: 22, color: "rgba(255,255,255,0.45)", marginTop: 12 }, "of all rated Bristol & Districts players"),
+            txt({ fontSize: 16, color: "rgba(255,255,255,0.25)", marginTop: 8 }, "I rank #" + rank + " of " + total + " rated players"),
             txt({ fontSize: 28, fontWeight: 700, color: "rgba(255,255,255,0.8)", marginTop: 24 }, displayName(name)),
         ]),
     ])
@@ -146,11 +146,11 @@ function ratingJourneyCard({ name, currentRating, yearAgoRating, change, domainL
     return cardBase(COLORS.black, COLORS.mint, PAWN_URI, 600, "RATING", [
         topBar("RATING JOURNEY · " + (domainLabel || "STANDARD").toUpperCase()),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
-            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "CURRENT RATING"),
+            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "MY CURRENT RATING"),
             txt({ fontSize: 186, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, String(currentRating)),
             box({ display: "flex", alignItems: "baseline", gap: 16, marginTop: 16 }, [
                 txt({ fontSize: 52, fontWeight: 900, color: changeColor, fontFamily: "monospace" }, sign + change + " pts"),
-                txt({ fontSize: 20, color: COLORS.zinc500 }, "from " + yearAgoRating + " a year ago"),
+                txt({ fontSize: 20, color: COLORS.zinc500 }, "up from " + yearAgoRating + " a year ago"),
             ]),
             txt({ fontSize: 28, fontWeight: 700, color: "rgba(255,255,255,0.8)", marginTop: 24 }, displayName(name)),
         ]),
@@ -176,7 +176,7 @@ function seasonScoreboardCard({ name, played, wins, draws, losses }) {
                     txt({ fontSize: 13, fontWeight: 700, color: COLORS.zinc700, letterSpacing: "0.2em" }, "LOSSES"),
                 ]),
             ]),
-            txt({ fontSize: 18, color: COLORS.zinc500, marginTop: 20 }, played + " league games this season"),
+            txt({ fontSize: 18, color: COLORS.zinc500, marginTop: 20 }, "I played " + played + " league games this season"),
         ]),
     ])
 }
@@ -184,12 +184,12 @@ function seasonScoreboardCard({ name, played, wins, draws, losses }) {
 function inGoodCompanyCard({ name, drawRate, gmName, gmDrawRate }) {
     const diff = Math.abs(parseInt(drawRate) - parseInt(gmDrawRate))
     const caption = parseInt(drawRate) < parseInt(gmDrawRate)
-        ? "More decisive than " + gmName + " — " + diff + "pp fewer draws"
-        : "Matching " + gmName + "'s career draw rate"
+        ? "I draw less than " + gmName + " — " + diff + "pp fewer draws than the world champion"
+        : "I match " + gmName + "'s career draw rate exactly"
     return cardBase(COLORS.black, "#6366F1", KNIGHT_URI, 640, "DRAWS", [
         topBar("IN GOOD COMPANY"),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
-            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "YOUR DRAW RATE THIS SEASON"),
+            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "MY DRAW RATE THIS SEASON"),
             txt({ fontSize: 186, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, drawRate + "%"),
             box({ display: "flex", alignItems: "baseline", gap: 14, marginTop: 14 }, [
                 txt({ fontSize: 36, fontWeight: 900, color: "rgba(255,255,255,0.2)", fontFamily: "monospace" }, "vs " + gmDrawRate + "%"),
@@ -206,7 +206,7 @@ function giantKillingCard({ name, opponent, ownRating, oppRating, differential }
     return cardBase(COLORS.black, COLORS.mint, KNIGHT_URI, 700, "UPSET", [
         topBar("GIANT KILLING"),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
-            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "BIGGEST RATING UPSET THIS SEASON"),
+            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "MY BIGGEST RATING UPSET THIS SEASON"),
             box({ display: "flex", alignItems: "center", gap: 40, marginTop: 4 }, [
                 txt({ fontSize: 200, fontWeight: 900, color: COLORS.mint, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, "+" + differential),
                 box({ display: "flex", flexDirection: "column", gap: 14 }, [
@@ -221,7 +221,7 @@ function giantKillingCard({ name, opponent, ownRating, oppRating, differential }
                 ]),
             ]),
             txt({ fontSize: 28, fontWeight: 700, color: "rgba(255,255,255,0.9)", marginTop: 16 }, displayName(name)),
-            txt({ fontSize: 20, color: COLORS.zinc500 }, "beat " + oppName),
+            txt({ fontSize: 20, color: COLORS.zinc500 }, "I beat " + oppName),
         ]),
     ])
 }
@@ -229,11 +229,11 @@ function giantKillingCard({ name, opponent, ownRating, oppRating, differential }
 function toughestOpponentCard({ name, opponent, oppRating, ownRating, outcome }) {
     const oppName = opponent.includes(",") ? opponent.split(",").reverse().join(" ").trim() : opponent
     const outcomeColor = outcome === "win" ? COLORS.mint : outcome === "draw" ? "rgba(255,255,255,0.6)" : "#FF9B8E"
-    const outcomeTag = outcome === "win" ? "YOU WON" : outcome === "draw" ? "YOU DREW" : "YOU LOST"
+    const outcomeTag = outcome === "win" ? "AND I WON" : outcome === "draw" ? "AND I DREW" : "AND I LOST — MY TOUGHEST TEST"
     return cardBase(COLORS.black, "#EF4444", KNIGHT_URI, 680, "TOUGH", [
         topBar("TOUGHEST OPPONENT"),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
-            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "HIGHEST-RATED OPPONENT FACED"),
+            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "MY TOUGHEST OPPONENT THIS SEASON"),
             txt({ fontSize: 186, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, String(oppRating)),
             txt({ fontSize: 32, fontWeight: 700, color: "rgba(255,255,255,0.65)", marginTop: 12 }, oppName),
             txt({ fontSize: 24, fontWeight: 900, color: outcomeColor, letterSpacing: "0.1em", marginTop: 8 }, outcomeTag),
@@ -247,9 +247,9 @@ function yourPeopleCard({ name, totalGames, uniqueOpponents, wins, losses }) {
     return cardBase(COLORS.black, "#F59E0B", PAWN_URI, 600, "PEOPLE", [
         topBar("YOUR PEOPLE"),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
-            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "OPPONENTS THIS SEASON"),
+            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "PEOPLE I PLAYED THIS SEASON"),
             txt({ fontSize: 186, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, String(uniqueOpponents)),
-            txt({ fontSize: 22, color: "rgba(255,255,255,0.35)", marginTop: 10 }, "people sat across a board from you"),
+            txt({ fontSize: 22, color: "rgba(255,255,255,0.35)", marginTop: 10 }, "people sat across a board from me"),
             box({ display: "flex", alignItems: "flex-end", gap: 36, marginTop: 20 }, [
                 box({ display: "flex", flexDirection: "column", gap: 4 }, [
                     txt({ fontSize: 56, fontWeight: 900, color: COLORS.mint, fontFamily: "monospace", lineHeight: 1 }, String(wins)),
@@ -271,8 +271,8 @@ function yourPeopleCard({ name, totalGames, uniqueOpponents, wins, losses }) {
 
 function colourStrengthCard({ name, whitePct, blackPct, stronger }) {
     const diff = Math.abs(parseInt(whitePct) - parseInt(blackPct))
-    const caption = stronger === "neither" ? "Equal strength with both colours"
-        : "+" + diff + "pp stronger with the " + stronger + " pieces"
+    const caption = stronger === "neither" ? "I score equally with both colours — a rare balance"
+        : "I'm " + diff + "pp stronger with the " + stronger + " pieces"
     return cardBase(COLORS.black, "#A855F7", KNIGHT_URI, 660, "COLOUR", [
         topBar("WHITE & BLACK"),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
@@ -292,15 +292,24 @@ function colourStrengthCard({ name, whitePct, blackPct, stronger }) {
     ])
 }
 
-function degreesOfSeparationCard({ name, degrees, playerCount }) {
-    return cardBase(COLORS.black, "#8B5CF6", KNIGHT_URI, 700, "DEGREES", [
+function degreesOfSeparationCard({ name, degrees, playerCount, chain }) {
+    const chainParts = chain ? decodeURIComponent(chain).split("→") : []
+    return cardBase(COLORS.black, "#8B5CF6", KNIGHT_URI, 700, "DEGREES OF SEPARATION", [
         topBar("DEGREES OF SEPARATION"),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
-            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "DEGREES FROM GM MICHAEL ADAMS"),
-            txt({ fontSize: 220, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.06em", fontFamily: "monospace" }, String(degrees)),
-            txt({ fontSize: 22, color: "rgba(255,255,255,0.4)", marginTop: 12 }, "9× British Champion · England #2"),
-            txt({ fontSize: 18, color: COLORS.zinc700, marginTop: 6 }, "via over-the-board games · " + playerCount + " Bristol players"),
-            txt({ fontSize: 28, fontWeight: 700, color: "rgba(255,255,255,0.8)", marginTop: 20 }, displayName(name)),
+            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "I AM CONNECTED TO GM MICHAEL ADAMS BY"),
+            box({ display: "flex", alignItems: "baseline", gap: 20, marginTop: 4 }, [
+                txt({ fontSize: 200, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.06em", fontFamily: "monospace" }, String(degrees)),
+                box({ display: "flex", flexDirection: "column", gap: 4, paddingBottom: 12 }, [
+                    txt({ fontSize: 34, fontWeight: 700, color: "rgba(255,255,255,0.6)" }, "degrees of"),
+                    txt({ fontSize: 34, fontWeight: 700, color: "rgba(255,255,255,0.6)" }, "separation"),
+                ]),
+            ]),
+            txt({ fontSize: 17, color: COLORS.zinc500, marginTop: 8 }, "Like Six Degrees of Kevin Bacon — but every link is a real over-the-board chess game"),
+            chainParts.length > 0
+                ? txt({ fontSize: 15, color: "rgba(255,255,255,0.22)", marginTop: 10, letterSpacing: "0.03em" }, chainParts.join(" → "))
+                : txt({ fontSize: 15, color: COLORS.zinc700, marginTop: 10 }, "via " + playerCount + " Bristol & Districts players"),
+            txt({ fontSize: 26, fontWeight: 700, color: "rgba(255,255,255,0.8)", marginTop: 14 }, displayName(name) + " · Bristol & Districts"),
         ]),
     ])
 }
@@ -400,6 +409,7 @@ module.exports = async function handler(req, res) {
                 name: p.get("name") || "Bristol Player",
                 degrees: parseInt(p.get("degrees") || "0"),
                 playerCount: parseInt(p.get("player_count") || "0"),
+                chain: p.get("chain") || "",
             })
 
         } else {
