@@ -106,6 +106,28 @@ function topBar(moduleTag) {
     ])
 }
 
+function ctaFooter() {
+    return box({
+        position: "absolute",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 48,
+        backgroundColor: "rgba(255,255,255,0.04)",
+        borderTop: "1px solid rgba(255,255,255,0.06)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingLeft: 64,
+        paddingRight: 64,
+    }, [
+        txt({ fontSize: 15, fontWeight: 600, color: "rgba(255,255,255,0.3)", letterSpacing: "0.08em" },
+            "→  Find your own chess year at"),
+        txt({ fontSize: 15, fontWeight: 700, color: COLORS.mint, letterSpacing: "0.1em" },
+            "BRISTOLCHESS.CO.UK/YOUR-CHESS-YEAR"),
+    ])
+}
+
 function cardBase(bgColor, glowColor, pieceUri, pieceSize, watermarkText, children) {
     return box({
         position: "relative",
@@ -114,7 +136,7 @@ function cardBase(bgColor, glowColor, pieceUri, pieceSize, watermarkText, childr
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        padding: "52px 64px",
+        padding: "52px 64px 76px",
         fontFamily: "Arial, sans-serif",
         overflow: "hidden",
     }, [
@@ -122,6 +144,7 @@ function cardBase(bgColor, glowColor, pieceUri, pieceSize, watermarkText, childr
         watermark(watermarkText),
         pieceEl(pieceUri, pieceSize),
         ...children,
+        ctaFooter(),
     ])
 }
 
