@@ -369,7 +369,9 @@ export default async function handler(req, res) {
                     match.data.forEach(board => {
                         const hname = board.hname?.trim()
                         const aname = board.aname?.trim()
-                        if (hname && aname) {
+                        // Skip forfeited boards — LMS uses "Default" as the player name
+                        const isDefault = (n) => !n || n.toLowerCase() === "default" || n.toLowerCase().startsWith("default ")
+                        if (hname && aname && !isDefault(hname) && !isDefault(aname)) {
                             addEdge(hname, aname, `Bristol & Districts ${division} 2024/25`)
                         }
                     })
