@@ -398,10 +398,36 @@ export default async function handler(req, res) {
                 ? Math.round(bristolDeltaSum / bristolDeltaCount)
                 : 0
 
-            // No year-ago Standard rating found — common for juniors/improvers who
-            // only had a Rapid/faster-format rating a year ago. Not an error: return
-            // a "new player" payload so the component can show a positive framing
-            // instead of a generic failure message.
+            // No year-ago Standard rating found — could mean genuinely new to ratings,
+            // OR could mean they started playing Standard after the year-ago date.
+            // Before flagging as new, check if they have ANY historical rating within
+            // the past 24 months — if so, use the earliest available point instead.
+            if (playerYearAgoRating === null) {
+                // Try monthly snapshots going back 24 months to find the earliest rating
+                const fallbackDates = []
+                const now = new Date()
+                for (let i = 1; i <= 24; i++) {
+                    const d = new Date(now)
+                    d.setMonth(d.getMonth() - i)
+                    d.setDate(1)
+                    fallbackDates.push(d.toISOString().split("T")[0])
+                }
+                const fallbackResults = await Promise.all(
+                    fallbackDates.map(date =>
+                        fetchECF(`v2/ratings/${RATING_DOMAINS[domain].historyLetter}/${ecf_code}/${date}`)
+                            .then(r => ({ date, rating: parseRevisedRating(r.data) }))
+                            .catch(() => ({ date, rating: null }))
+                    )
+                )
+                // Find the earliest month they had a rating
+                const firstRated = fallbackResults.slice().reverse().find(p => p.rating !== null)
+                if (firstRated) {
+                    // They have history — use the earliest available rating as the baseline
+                    playerYearAgoRating = firstRated.rating
+                }
+            }
+
+            // Still no rating found anywhere in past 24 months — genuinely new player
             if (playerYearAgoRating === null) {
                 const payload = {
                     ecf_code: player.ecf_code,
