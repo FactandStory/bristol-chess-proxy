@@ -98,11 +98,11 @@ function topBar(moduleTag) {
         alignItems: "center",
         marginBottom: 0,
     }, [
-        box({ display: "flex", alignItems: "center", gap: 10 }, [
-            box({ width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.mint }, []),
-            txt({ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.35)", letterSpacing: "0.18em", fontFamily: "Arial, sans-serif" }, "BRISTOL CHESS"),
+        box({ display: "flex", alignItems: "center", gap: 12 }, [
+            box({ width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.mint }, []),
+            txt({ fontSize: 22, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: "0.18em", fontFamily: "Arial, sans-serif" }, "BRISTOL CHESS"),
         ]),
-        txt({ fontSize: 11, color: "rgba(255,255,255,0.2)", letterSpacing: "0.14em", fontFamily: "Arial, sans-serif" }, "YOUR CHESS YEAR · " + moduleTag),
+        txt({ fontSize: 20, fontWeight: 600, color: "rgba(255,255,255,0.25)", letterSpacing: "0.14em", fontFamily: "Arial, sans-serif" }, "YOUR CHESS YEAR · " + moduleTag),
     ])
 }
 
@@ -130,7 +130,7 @@ function whereYouStandCard({ name, percentile, rank, total }) {
     return cardBase(COLORS.black, COLORS.mint, KNIGHT_URI, 680, "RANK", [
         topBar("WHERE YOU STAND"),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
-            txt({ fontSize: 13, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.22em" }, "YOU'RE RATED HIGHER THAN"),
+            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "YOU'RE RATED HIGHER THAN"),
             txt({ fontSize: 186, fontWeight: 900, color: COLORS.mint, lineHeight: 0.85, letterSpacing: "-0.05em" }, pct + "%"),
             txt({ fontSize: 22, color: "rgba(255,255,255,0.45)", marginTop: 12 }, "of rated Bristol & Districts players"),
             txt({ fontSize: 16, color: "rgba(255,255,255,0.25)", marginTop: 8 }, "Ranked #" + rank + " of " + total),
@@ -146,7 +146,7 @@ function ratingJourneyCard({ name, currentRating, yearAgoRating, change, domainL
     return cardBase(COLORS.black, COLORS.mint, PAWN_URI, 600, "RATING", [
         topBar("RATING JOURNEY · " + (domainLabel || "STANDARD").toUpperCase()),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
-            txt({ fontSize: 13, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.22em" }, "CURRENT RATING"),
+            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "CURRENT RATING"),
             txt({ fontSize: 186, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, String(currentRating)),
             box({ display: "flex", alignItems: "baseline", gap: 16, marginTop: 16 }, [
                 txt({ fontSize: 52, fontWeight: 900, color: changeColor, fontFamily: "monospace" }, sign + change + " pts"),
@@ -189,7 +189,7 @@ function inGoodCompanyCard({ name, drawRate, gmName, gmDrawRate }) {
     return cardBase(COLORS.black, "#6366F1", KNIGHT_URI, 640, "DRAWS", [
         topBar("IN GOOD COMPANY"),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
-            txt({ fontSize: 13, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.22em" }, "YOUR DRAW RATE THIS SEASON"),
+            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "YOUR DRAW RATE THIS SEASON"),
             txt({ fontSize: 186, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, drawRate + "%"),
             box({ display: "flex", alignItems: "baseline", gap: 14, marginTop: 14 }, [
                 txt({ fontSize: 36, fontWeight: 900, color: "rgba(255,255,255,0.2)", fontFamily: "monospace" }, "vs " + gmDrawRate + "%"),
@@ -206,7 +206,7 @@ function giantKillingCard({ name, opponent, ownRating, oppRating, differential }
     return cardBase(COLORS.black, COLORS.mint, KNIGHT_URI, 700, "UPSET", [
         topBar("GIANT KILLING"),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
-            txt({ fontSize: 13, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.22em" }, "BIGGEST RATING UPSET THIS SEASON"),
+            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "BIGGEST RATING UPSET THIS SEASON"),
             box({ display: "flex", alignItems: "center", gap: 40, marginTop: 4 }, [
                 txt({ fontSize: 200, fontWeight: 900, color: COLORS.mint, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, "+" + differential),
                 box({ display: "flex", flexDirection: "column", gap: 14 }, [
@@ -233,7 +233,7 @@ function toughestOpponentCard({ name, opponent, oppRating, ownRating, outcome })
     return cardBase(COLORS.black, "#EF4444", KNIGHT_URI, 680, "TOUGH", [
         topBar("TOUGHEST OPPONENT"),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
-            txt({ fontSize: 13, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.22em" }, "HIGHEST-RATED OPPONENT FACED"),
+            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "HIGHEST-RATED OPPONENT FACED"),
             txt({ fontSize: 186, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, String(oppRating)),
             txt({ fontSize: 32, fontWeight: 700, color: "rgba(255,255,255,0.65)", marginTop: 12 }, oppName),
             txt({ fontSize: 24, fontWeight: 900, color: outcomeColor, letterSpacing: "0.1em", marginTop: 8 }, outcomeTag),
@@ -247,7 +247,7 @@ function yourPeopleCard({ name, totalGames, uniqueOpponents, wins, losses }) {
     return cardBase(COLORS.black, "#F59E0B", PAWN_URI, 600, "PEOPLE", [
         topBar("YOUR PEOPLE"),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
-            txt({ fontSize: 13, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.22em" }, "OPPONENTS THIS SEASON"),
+            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "OPPONENTS THIS SEASON"),
             txt({ fontSize: 186, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, String(uniqueOpponents)),
             txt({ fontSize: 22, color: "rgba(255,255,255,0.35)", marginTop: 10 }, "people sat across a board from you"),
             box({ display: "flex", alignItems: "flex-end", gap: 36, marginTop: 20 }, [
@@ -296,7 +296,7 @@ function degreesOfSeparationCard({ name, degrees, playerCount }) {
     return cardBase(COLORS.black, "#8B5CF6", KNIGHT_URI, 700, "DEGREES", [
         topBar("DEGREES OF SEPARATION"),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
-            txt({ fontSize: 13, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.22em" }, "DEGREES FROM GM MICHAEL ADAMS"),
+            txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "DEGREES FROM GM MICHAEL ADAMS"),
             txt({ fontSize: 220, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.06em", fontFamily: "monospace" }, String(degrees)),
             txt({ fontSize: 22, color: "rgba(255,255,255,0.4)", marginTop: 12 }, "9× British Champion · England #2"),
             txt({ fontSize: 18, color: COLORS.zinc700, marginTop: 6 }, "via over-the-board games · " + playerCount + " Bristol players"),
