@@ -40,21 +40,6 @@ function img(src, style) {
     return { type: "img", props: { src, style } }
 }
 
-// Piece watermark — 1 to 3 pieces, right side, low opacity
-function pieceWatermark(pieceKeys) {
-    const count = pieceKeys.length
-    const size = count === 1 ? 360 : count === 2 ? 260 : 200
-    const topOffset = count === 1 ? 100 : count === 2 ? 60 : 30
-    return box({
-        position: "absolute",
-        right: 48, top: topOffset,
-        flexDirection: "column",
-        alignItems: "flex-end",
-        gap: count > 1 ? 8 : 0,
-        opacity: 0.08,
-    }, pieceKeys.map(k => img(PIECE[k], { width: size, height: size })))
-}
-
 function displayName(name) {
     if (!name) return "Bristol Player"
     if (name.includes(",")) {
@@ -64,126 +49,164 @@ function displayName(name) {
     return name
 }
 
-function bar(fillPct, h) {
+function bar(fillPct) {
     const w = Math.max(0, Math.min(100, fillPct))
-    return box({ width: 680, height: h || 10, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 5 }, [
-        box({ width: Math.round(w * 6.8), height: h || 10, backgroundColor: COLORS.white, borderRadius: 5 }, []),
+    return box({ width: "100%", maxWidth: 560, height: 8, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 4 }, [
+        box({ width: Math.round(w * 5.6) + "px", height: 8, backgroundColor: COLORS.white, borderRadius: 4 }, []),
     ])
 }
 
-function cardShell(bgColor, pieceKeys, children) {
+// New two-column card shell:
+// LEFT: 660px wide — header strip, content, name, stats
+// RIGHT: 540px wide — single Bristol piece at high opacity, full height
+function cardShell(bgColor, pieceKey, leftChildren) {
+    const pieceIsKnight = pieceKey === "knight"
+    // knight is 1024×1024 square; pawn is 245×245 square
+    // both should fill the right column from top to bottom
+    const pieceSize = pieceIsKnight ? 520 : 500
+
     return box({
         width: W, height: H,
         backgroundColor: bgColor,
-        flexDirection: "column",
-        padding: "52px 72px",
         fontFamily: "Arial, sans-serif",
-        position: "relative",
         overflow: "hidden",
+        position: "relative",
     }, [
-        box({ justifyContent: "space-between", alignItems: "center", marginBottom: 36 }, [
-            box({ alignItems: "center", gap: 12 }, [
-                img(LOGO, { width: 34, height: 34 }),
-                txt({ fontSize: 16, fontWeight: 700, color: COLORS.offWhite, letterSpacing: 2 }, "BRISTOL CHESS"),
+        // LEFT COLUMN — full height, content lives here
+        box({
+            width: 680,
+            height: H,
+            flexDirection: "column",
+            padding: "44px 56px",
+            position: "relative",
+        }, [
+            // Top: logo + module tag
+            box({ justifyContent: "space-between", alignItems: "center", marginBottom: 32 }, [
+                box({ alignItems: "center", gap: 10 }, [
+                    img(LOGO, { width: 30, height: 30 }),
+                    txt({ fontSize: 14, fontWeight: 700, color: COLORS.offWhite, letterSpacing: 2 }, "BRISTOL CHESS"),
+                ]),
+                txt({ fontSize: 11, color: COLORS.muted, letterSpacing: 2 }, "YOUR CHESS YEAR"),
             ]),
-            txt({ fontSize: 12, color: COLORS.muted, letterSpacing: 2 }, "YOUR CHESS YEAR"),
+            // Content passed in
+            ...leftChildren,
         ]),
-        pieceWatermark(pieceKeys),
-        ...children,
+        // RIGHT COLUMN — piece fills this space
+        box({
+            position: "absolute",
+            right: 0,
+            top: 0,
+            width: 520,
+            height: H,
+            alignItems: "center",
+            justifyContent: "center",
+            overflow: "hidden",
+        }, [
+            img(PIECE[pieceKey], {
+                width: pieceSize,
+                height: pieceSize,
+                opacity: 0.55,
+            }),
+        ]),
+        // Subtle left edge fade on piece column — solid colour strip
+        box({
+            position: "absolute",
+            left: 600,
+            top: 0,
+            width: 80,
+            height: H,
+            backgroundColor: bgColor,
+            opacity: 0.6,
+        }, []),
     ])
 }
 
-function whereYouStandCard({ name, percentile, rank, total, domainLabel }) {
-    return cardShell(COLORS.purple, ["knight"], [
-        txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 16 }, "WHERE YOU STAND · BRISTOL & DISTRICTS"),
-        txt({ fontSize: 26, fontWeight: 700, color: COLORS.white, marginBottom: 20 }, displayName(name)),
-        txt({ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: 3, marginBottom: 4 }, "YOU'RE RATED HIGHER THAN"),
-        txt({ fontSize: 108, fontWeight: 700, color: COLORS.white, fontFamily: "monospace", letterSpacing: -2, lineHeight: 1, marginBottom: 8 }, percentile + "%"),
-        txt({ fontSize: 18, color: COLORS.offWhite, marginBottom: 36 }, "of rated Bristol & Districts players"),
-        bar(parseFloat(percentile), 10),
-        txt({ fontSize: 15, color: COLORS.muted, marginTop: 14 }, "Ranked #" + rank + " of " + total + " rated players"),
+function whereYouStandCard({ name, percentile, rank, total }) {
+    return cardShell(COLORS.purple, "knight", [
+        txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 6 }, "WHERE YOU STAND · BRISTOL & DISTRICTS"),
+        txt({ fontSize: 32, fontWeight: 700, color: COLORS.white, marginBottom: 28 }, displayName(name)),
+        txt({ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: 3, marginBottom: 2 }, "YOU'RE RATED HIGHER THAN"),
+        txt({ fontSize: 140, fontWeight: 700, color: COLORS.white, fontFamily: "monospace", letterSpacing: -4, lineHeight: 1, marginBottom: 6 }, percentile + "%"),
+        txt({ fontSize: 20, color: COLORS.offWhite, marginBottom: 28 }, "of rated Bristol & Districts players"),
+        bar(parseFloat(percentile)),
+        txt({ fontSize: 14, color: COLORS.muted, marginTop: 12 }, "Ranked #" + rank + " of " + total + " rated players"),
     ])
 }
 
 function ratingJourneyCard({ name, currentRating, yearAgoRating, change, domainLabel }) {
     const up = change >= 0
     const changeColor = up ? "#6FE0A0" : "#FF9B8E"
-    const arrow = up ? "+" : "-"
-    return cardShell(COLORS.green, ["pawn", "knight"], [
-        txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 8 }, "RATING JOURNEY"),
-        txt({ fontSize: 26, fontWeight: 700, color: COLORS.white, marginBottom: 24 }, displayName(name)),
-        txt({ fontSize: 108, fontWeight: 700, color: COLORS.white, fontFamily: "monospace", letterSpacing: -2, lineHeight: 1, marginBottom: 8 }, String(currentRating)),
-        txt({ fontSize: 18, color: COLORS.offWhite, marginBottom: 20 }, domainLabel + " rating · Bristol & Districts"),
-        box({ alignItems: "center", gap: 16 }, [
-            txt({ fontSize: 28, fontWeight: 700, color: changeColor }, arrow + Math.abs(change) + " this season"),
-            txt({ fontSize: 16, color: COLORS.muted }, "from " + yearAgoRating + " a year ago"),
+    const sign = up ? "+" : ""
+    return cardShell(COLORS.green, "pawn", [
+        txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 6 }, "RATING JOURNEY · " + domainLabel.toUpperCase()),
+        txt({ fontSize: 32, fontWeight: 700, color: COLORS.white, marginBottom: 24 }, displayName(name)),
+        txt({ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: 3, marginBottom: 2 }, "CURRENT RATING"),
+        txt({ fontSize: 140, fontWeight: 700, color: COLORS.white, fontFamily: "monospace", letterSpacing: -4, lineHeight: 1, marginBottom: 16 }, String(currentRating)),
+        box({ alignItems: "baseline", gap: 16 }, [
+            txt({ fontSize: 48, fontWeight: 700, color: changeColor, fontFamily: "monospace" }, sign + change + " pts"),
+            txt({ fontSize: 18, color: COLORS.muted }, "from " + yearAgoRating + " a year ago"),
         ]),
     ])
 }
 
 function seasonScoreboardCard({ name, played, wins, draws, losses, scorePct }) {
-    return cardShell(COLORS.blue, ["knight"], [
-        txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 8 }, "SEASON SCOREBOARD"),
-        txt({ fontSize: 26, fontWeight: 700, color: COLORS.white, marginBottom: 28 }, displayName(name)),
-        box({ gap: 56, alignItems: "flex-end", marginBottom: 32 }, [
-            box({ flexDirection: "column", gap: 6 }, [
-                txt({ fontSize: 80, fontWeight: 700, color: "#6FE0A0", fontFamily: "monospace", lineHeight: 1 }, String(wins)),
-                txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "WINS"),
+    return cardShell(COLORS.blue, "knight", [
+        txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 6 }, "SEASON SCOREBOARD · BRISTOL & DISTRICTS"),
+        txt({ fontSize: 32, fontWeight: 700, color: COLORS.white, marginBottom: 36 }, displayName(name)),
+        box({ gap: 48, alignItems: "flex-end", marginBottom: 32 }, [
+            box({ flexDirection: "column", gap: 8 }, [
+                txt({ fontSize: 120, fontWeight: 700, color: "#6FE0A0", fontFamily: "monospace", lineHeight: 1 }, String(wins)),
+                txt({ fontSize: 13, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "WINS"),
             ]),
-            box({ flexDirection: "column", gap: 6 }, [
-                txt({ fontSize: 80, fontWeight: 700, color: COLORS.offWhite, fontFamily: "monospace", lineHeight: 1 }, String(draws)),
-                txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "DRAWS"),
+            box({ flexDirection: "column", gap: 8 }, [
+                txt({ fontSize: 120, fontWeight: 700, color: COLORS.offWhite, fontFamily: "monospace", lineHeight: 1 }, String(draws)),
+                txt({ fontSize: 13, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "DRAWS"),
             ]),
-            box({ flexDirection: "column", gap: 6 }, [
-                txt({ fontSize: 80, fontWeight: 700, color: "#FF9B8E", fontFamily: "monospace", lineHeight: 1 }, String(losses)),
-                txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "LOSSES"),
+            box({ flexDirection: "column", gap: 8 }, [
+                txt({ fontSize: 120, fontWeight: 700, color: "#FF9B8E", fontFamily: "monospace", lineHeight: 1 }, String(losses)),
+                txt({ fontSize: 13, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "LOSSES"),
             ]),
         ]),
-        txt({ fontSize: 16, color: COLORS.muted }, played + " league games · " + scorePct + "% score rate"),
+        txt({ fontSize: 16, color: COLORS.muted }, played + " league games this season"),
     ])
 }
 
 function inGoodCompanyCard({ name, drawRate, gmName, gmDrawRate }) {
     const diff = Math.abs(drawRate - gmDrawRate)
     const caption = drawRate < gmDrawRate
-        ? "More decisive than " + gmName + " — drew " + diff + "pp fewer games this season."
+        ? "More decisive than " + gmName + " — " + diff + "pp fewer draws this season"
         : diff === 0
-        ? "Exactly matching " + gmName + "'s career draw rate."
-        : diff + "pp above " + gmName + "'s career average of " + gmDrawRate + "%."
-    return cardShell(COLORS.teal, ["knight", "pawn"], [
-        txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 8 }, "IN GOOD COMPANY"),
-        txt({ fontSize: 26, fontWeight: 700, color: COLORS.white, marginBottom: 24 }, displayName(name)),
-        box({ alignItems: "flex-end", gap: 40, marginBottom: 24 }, [
-            box({ flexDirection: "column", gap: 6 }, [
-                txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "YOUR DRAW RATE"),
-                txt({ fontSize: 88, fontWeight: 700, color: COLORS.white, fontFamily: "monospace", lineHeight: 1 }, drawRate + "%"),
-            ]),
-            txt({ fontSize: 18, color: COLORS.muted, marginBottom: 14 }, "vs"),
-            box({ flexDirection: "column", gap: 6 }, [
-                txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, gmName.toUpperCase() + " · CAREER"),
-                txt({ fontSize: 88, fontWeight: 700, color: "rgba(255,255,255,0.4)", fontFamily: "monospace", lineHeight: 1 }, gmDrawRate + "%"),
-            ]),
+        ? "Exactly matching " + gmName + "'s career draw rate"
+        : diff + "pp above " + gmName + "'s career average"
+    return cardShell(COLORS.teal, "knight", [
+        txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 6 }, "IN GOOD COMPANY · BRISTOL & DISTRICTS"),
+        txt({ fontSize: 32, fontWeight: 700, color: COLORS.white, marginBottom: 28 }, displayName(name)),
+        txt({ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: 3, marginBottom: 2 }, "YOUR DRAW RATE THIS SEASON"),
+        txt({ fontSize: 140, fontWeight: 700, color: COLORS.white, fontFamily: "monospace", letterSpacing: -4, lineHeight: 1, marginBottom: 16 }, drawRate + "%"),
+        box({ alignItems: "baseline", gap: 12 }, [
+            txt({ fontSize: 28, fontWeight: 700, color: "rgba(255,255,255,0.35)", fontFamily: "monospace" }, "vs " + gmDrawRate + "%"),
+            txt({ fontSize: 18, color: COLORS.muted }, gmName + " career"),
         ]),
-        txt({ fontSize: 16, color: COLORS.muted }, caption),
+        txt({ fontSize: 16, color: COLORS.muted, marginTop: 12 }, caption),
     ])
 }
 
 function giantKillingCard({ name, opponent, ownRating, oppRating, differential }) {
     const oppName = opponent.includes(",") ? opponent.split(",").reverse().join(" ").trim() : opponent
-    return cardShell(COLORS.black, ["knight"], [
-        txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 16 }, "GIANT KILLING · BRISTOL & DISTRICTS"),
-        txt({ fontSize: 26, fontWeight: 700, color: COLORS.white, marginBottom: 8 }, displayName(name)),
-        txt({ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: 3, marginBottom: 4 }, "BIGGEST UPSET — RATING DIFFERENTIAL"),
-        txt({ fontSize: 108, fontWeight: 700, color: "#6FE0A0", fontFamily: "monospace", letterSpacing: -2, lineHeight: 1, marginBottom: 16 }, "+" + differential),
-        box({ gap: 32, alignItems: "flex-start" }, [
+    return cardShell(COLORS.black, "knight", [
+        txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 6 }, "GIANT KILLING · BRISTOL & DISTRICTS"),
+        txt({ fontSize: 32, fontWeight: 700, color: COLORS.white, marginBottom: 20 }, displayName(name)),
+        txt({ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: 3, marginBottom: 2 }, "BIGGEST RATING UPSET"),
+        txt({ fontSize: 140, fontWeight: 700, color: "#6FE0A0", fontFamily: "monospace", letterSpacing: -4, lineHeight: 1, marginBottom: 16 }, "+" + differential),
+        box({ gap: 32, alignItems: "flex-end" }, [
             box({ flexDirection: "column", gap: 4 }, [
-                txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "THEIR RATING"),
-                txt({ fontSize: 36, fontWeight: 700, color: COLORS.white, fontFamily: "monospace" }, String(oppRating)),
-                txt({ fontSize: 16, color: "rgba(255,255,255,0.6)" }, oppName),
+                txt({ fontSize: 13, fontWeight: 700, color: COLORS.muted, letterSpacing: 2 }, "BEAT"),
+                txt({ fontSize: 42, fontWeight: 700, color: COLORS.white, fontFamily: "monospace" }, String(oppRating)),
+                txt({ fontSize: 18, color: "rgba(255,255,255,0.55)" }, oppName),
             ]),
             box({ flexDirection: "column", gap: 4 }, [
-                txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "YOUR RATING"),
-                txt({ fontSize: 36, fontWeight: 700, color: "rgba(255,255,255,0.5)", fontFamily: "monospace" }, String(ownRating)),
+                txt({ fontSize: 13, fontWeight: 700, color: COLORS.muted, letterSpacing: 2 }, "RATED"),
+                txt({ fontSize: 42, fontWeight: 700, color: "rgba(255,255,255,0.4)", fontFamily: "monospace" }, String(ownRating)),
             ]),
         ]),
     ])
@@ -192,70 +215,74 @@ function giantKillingCard({ name, opponent, ownRating, oppRating, differential }
 function toughestOpponentCard({ name, opponent, oppRating, ownRating, outcome }) {
     const oppName = opponent.includes(",") ? opponent.split(",").reverse().join(" ").trim() : opponent
     const outcomeColor = outcome === "win" ? "#6FE0A0" : outcome === "draw" ? "rgba(255,255,255,0.7)" : "#FF9B8E"
-    const outcomeLabel = outcome === "win" ? "AND WON" : outcome === "draw" ? "AND DREW" : "THEIR TOUGHEST TEST"
-    return cardShell(COLORS.black, ["knight"], [
-        txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 16 }, "TOUGHEST OPPONENT · BRISTOL & DISTRICTS"),
-        txt({ fontSize: 26, fontWeight: 700, color: COLORS.white, marginBottom: 20 }, displayName(name)),
-        txt({ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: 3, marginBottom: 4 }, "HIGHEST-RATED OPPONENT FACED"),
-        txt({ fontSize: 108, fontWeight: 700, color: COLORS.white, fontFamily: "monospace", letterSpacing: -2, lineHeight: 1, marginBottom: 8 }, String(oppRating)),
-        txt({ fontSize: 20, fontWeight: 700, color: "rgba(255,255,255,0.7)", marginBottom: 4 }, oppName),
-        txt({ fontSize: 18, fontWeight: 700, color: outcomeColor }, outcomeLabel),
+    const outcomeTag = outcome === "win" ? "✓ YOU WON" : outcome === "draw" ? "½ YOU DREW" : "✗ YOU LOST — THEIR TOUGHEST TEST"
+    return cardShell(COLORS.black, "knight", [
+        txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 6 }, "TOUGHEST OPPONENT · BRISTOL & DISTRICTS"),
+        txt({ fontSize: 32, fontWeight: 700, color: COLORS.white, marginBottom: 20 }, displayName(name)),
+        txt({ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: 3, marginBottom: 2 }, "HIGHEST-RATED OPPONENT FACED"),
+        txt({ fontSize: 140, fontWeight: 700, color: COLORS.white, fontFamily: "monospace", letterSpacing: -4, lineHeight: 1, marginBottom: 8 }, String(oppRating)),
+        txt({ fontSize: 28, fontWeight: 700, color: "rgba(255,255,255,0.7)", marginBottom: 12 }, oppName),
+        txt({ fontSize: 22, fontWeight: 700, color: outcomeColor }, outcomeTag),
     ])
 }
 
 function yourPeopleCard({ name, totalGames, uniqueOpponents, wins, losses }) {
-    return cardShell(COLORS.gold, ["pawn"], [
-        txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 16 }, "YOUR PEOPLE · BRISTOL & DISTRICTS"),
-        txt({ fontSize: 26, fontWeight: 700, color: COLORS.white, marginBottom: 20 }, displayName(name)),
-        txt({ fontSize: 108, fontWeight: 700, color: COLORS.white, fontFamily: "monospace", letterSpacing: -2, lineHeight: 1, marginBottom: 4 }, String(uniqueOpponents)),
-        txt({ fontSize: 18, color: COLORS.offWhite, marginBottom: 28 }, "people sat across a board from you this season"),
+    const draws = totalGames - wins - losses
+    return cardShell(COLORS.gold, "pawn", [
+        txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 6 }, "YOUR PEOPLE · BRISTOL & DISTRICTS"),
+        txt({ fontSize: 32, fontWeight: 700, color: COLORS.white, marginBottom: 20 }, displayName(name)),
+        txt({ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: 3, marginBottom: 2 }, "OPPONENTS THIS SEASON"),
+        txt({ fontSize: 140, fontWeight: 700, color: COLORS.white, fontFamily: "monospace", letterSpacing: -4, lineHeight: 1, marginBottom: 20 }, String(uniqueOpponents)),
         box({ gap: 40, alignItems: "flex-end" }, [
-            box({ flexDirection: "column", gap: 4 }, [
-                txt({ fontSize: 48, fontWeight: 700, color: "#6FE0A0", fontFamily: "monospace", lineHeight: 1 }, String(wins)),
-                txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "WINS"),
+            box({ flexDirection: "column", gap: 6 }, [
+                txt({ fontSize: 56, fontWeight: 700, color: "#6FE0A0", fontFamily: "monospace", lineHeight: 1 }, String(wins)),
+                txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "WINS"),
             ]),
-            box({ flexDirection: "column", gap: 4 }, [
-                txt({ fontSize: 48, fontWeight: 700, color: "#FF9B8E", fontFamily: "monospace", lineHeight: 1 }, String(losses)),
-                txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "LOSSES"),
+            box({ flexDirection: "column", gap: 6 }, [
+                txt({ fontSize: 56, fontWeight: 700, color: COLORS.offWhite, fontFamily: "monospace", lineHeight: 1 }, String(draws)),
+                txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "DRAWS"),
             ]),
-            box({ flexDirection: "column", gap: 4 }, [
-                txt({ fontSize: 48, fontWeight: 700, color: "rgba(255,255,255,0.6)", fontFamily: "monospace", lineHeight: 1 }, String(totalGames)),
-                txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "GAMES"),
+            box({ flexDirection: "column", gap: 6 }, [
+                txt({ fontSize: 56, fontWeight: 700, color: "#FF9B8E", fontFamily: "monospace", lineHeight: 1 }, String(losses)),
+                txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "LOSSES"),
             ]),
         ]),
     ])
 }
 
 function colourStrengthCard({ name, whitePct, blackPct, stronger }) {
-    const strongerColor = stronger === "White" ? "#F0F0F0" : stronger === "Black" ? "#E8A800" : COLORS.offWhite
-    return cardShell(COLORS.brown, ["knight"], [
-        txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 16 }, "WHITE & BLACK · BRISTOL & DISTRICTS"),
-        txt({ fontSize: 26, fontWeight: 700, color: COLORS.white, marginBottom: 24 }, displayName(name)),
-        box({ gap: 56, alignItems: "flex-end", marginBottom: 24 }, [
-            box({ flexDirection: "column", gap: 8 }, [
-                txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "WHITE PIECES"),
-                txt({ fontSize: 88, fontWeight: 700, color: "#F0F0F0", fontFamily: "monospace", lineHeight: 1 }, whitePct + "%"),
+    const diff = Math.abs(whitePct - blackPct)
+    const caption = stronger === "neither"
+        ? "Equal strength with both colours — a rare balance"
+        : "+" + diff + "pp stronger with the " + stronger + " pieces"
+    return cardShell(COLORS.brown, "knight", [
+        txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 6 }, "WHITE & BLACK · BRISTOL & DISTRICTS"),
+        txt({ fontSize: 32, fontWeight: 700, color: COLORS.white, marginBottom: 32 }, displayName(name)),
+        box({ gap: 48, alignItems: "flex-end", marginBottom: 24 }, [
+            box({ flexDirection: "column", gap: 10 }, [
+                txt({ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.4)", letterSpacing: 3 }, "WHITE"),
+                txt({ fontSize: 110, fontWeight: 700, color: "#F5F5F5", fontFamily: "monospace", lineHeight: 1 }, whitePct + "%"),
             ]),
-            box({ flexDirection: "column", gap: 8 }, [
-                txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 3 }, "BLACK PIECES"),
-                txt({ fontSize: 88, fontWeight: 700, color: "#E8A800", fontFamily: "monospace", lineHeight: 1 }, blackPct + "%"),
+            box({ flexDirection: "column", gap: 10 }, [
+                txt({ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.4)", letterSpacing: 3 }, "BLACK"),
+                txt({ fontSize: 110, fontWeight: 700, color: "#E8A800", fontFamily: "monospace", lineHeight: 1 }, blackPct + "%"),
             ]),
         ]),
-        txt({ fontSize: 18, color: stronger !== "neither" ? strongerColor : COLORS.muted },
-            stronger !== "neither" ? "Stronger with the " + stronger + " pieces" : "Equal strength with both colours"),
+        txt({ fontSize: 18, color: COLORS.muted }, caption),
     ])
 }
 
 function degreesOfSeparationCard({ name, degrees, playerCount }) {
-    return cardShell(COLORS.indigo, ["knight"], [
-        txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 16 }, "DEGREES OF SEPARATION · BRISTOL CHESS"),
-        txt({ fontSize: 26, fontWeight: 700, color: COLORS.white, marginBottom: 20 }, displayName(name)),
-        txt({ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: 3, marginBottom: 4 }, "DEGREES FROM GM MICHAEL ADAMS"),
-        txt({ fontSize: 108, fontWeight: 700, color: COLORS.white, fontFamily: "monospace", letterSpacing: -2, lineHeight: 1, marginBottom: 12 }, String(degrees)),
-        txt({ fontSize: 18, color: COLORS.offWhite, marginBottom: 4 }, "9× British Champion · England #2"),
-        txt({ fontSize: 14, color: COLORS.muted }, "via " + playerCount + " Bristol & Districts players"),
+    return cardShell(COLORS.indigo, "knight", [
+        txt({ fontSize: 11, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 6 }, "DEGREES OF SEPARATION · BRISTOL CHESS"),
+        txt({ fontSize: 32, fontWeight: 700, color: COLORS.white, marginBottom: 20 }, displayName(name)),
+        txt({ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: 3, marginBottom: 2 }, "DEGREES FROM GM MICHAEL ADAMS"),
+        txt({ fontSize: 140, fontWeight: 700, color: COLORS.white, fontFamily: "monospace", letterSpacing: -4, lineHeight: 1, marginBottom: 16 }, String(degrees)),
+        txt({ fontSize: 22, color: COLORS.offWhite, marginBottom: 6 }, "9× British Champion · England #2"),
+        txt({ fontSize: 15, color: COLORS.muted }, "via over-the-board games through " + playerCount + " Bristol players"),
     ])
 }
+
 
 module.exports = async function handler(req, res) {
     const { ImageResponse } = await import("@vercel/og")
