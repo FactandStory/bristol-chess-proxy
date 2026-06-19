@@ -20,6 +20,16 @@ const COLORS = {
     white: "#FFFFFF",
 }
 
+function txt(style, text) {
+    return { type: "div", props: { style: { display: "flex", ...style }, children: String(text) } }
+}
+function box(style, children) {
+    return { type: "div", props: { style: { display: "flex", ...style }, children } }
+}
+function img(src, style) {
+    return { type: "img", props: { src, style } }
+}
+
 // Dark Analytics card system — Swiss Modernist, asymmetric, data-forward
 // Satori constraints: no mask-image, no blur, no CSS gradients on background shorthand
 // Piece is an <img> at low opacity — architectural crop via overflow:hidden + positioning
