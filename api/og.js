@@ -166,7 +166,7 @@ function ratingJourneyCard({ name, currentRating, yearAgoRating, change, domainL
     const up = parseInt(change) >= 0
     const changeColor = up ? COLORS.mint : "#FF9B8E"
     const sign = parseInt(change) >= 0 ? "+" : ""
-    return cardBase(COLORS.black, COLORS.mint, PAWN_URI, 600, "RATING", [
+    return cardBase(COLORS.black, COLORS.mint, KNIGHT_URI, 700, "RATING", [
         topBar("RATING JOURNEY · " + (domainLabel || "STANDARD").toUpperCase()),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
             txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "MY CURRENT RATING"),
