@@ -141,8 +141,13 @@ function getYearAgoDate() {
 }
 
 function parseRevisedRating(hist) {
-    if (!hist || !hist.revised_rating) return null
-    const n = parseInt(String(hist.revised_rating).replace(/[^0-9]/g, ""))
+    if (!hist) return null
+    // ECF returns revised_rating for established ratings (A/K category)
+    // and original_rating for provisional ratings (P category).
+    // Both may have a letter suffix (e.g. "1087P") — strip non-digits.
+    const raw = hist.revised_rating ?? hist.original_rating ?? hist.rating
+    if (!raw) return null
+    const n = parseInt(String(raw).replace(/[^0-9]/g, ""))
     return isNaN(n) || n === 0 ? null : n
 }
 
