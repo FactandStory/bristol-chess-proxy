@@ -90,7 +90,7 @@ function cardShell(bgColor, pieceKeys, children) {
 }
 
 function whereYouStandCard({ name, percentile, rank, total, domainLabel }) {
-    return cardShell(COLORS.purple, ["queen"], [
+    return cardShell(COLORS.purple, ["knight"], [
         txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 16 }, "WHERE YOU STAND · BRISTOL & DISTRICTS"),
         txt({ fontSize: 26, fontWeight: 700, color: COLORS.white, marginBottom: 20 }, displayName(name)),
         txt({ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: 3, marginBottom: 4 }, "YOU'RE RATED HIGHER THAN"),
@@ -105,7 +105,7 @@ function ratingJourneyCard({ name, currentRating, yearAgoRating, change, domainL
     const up = change >= 0
     const changeColor = up ? "#6FE0A0" : "#FF9B8E"
     const arrow = up ? "+" : "-"
-    return cardShell(COLORS.green, ["pawn", "queen"], [
+    return cardShell(COLORS.green, ["pawn", "knight"], [
         txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 8 }, "RATING JOURNEY"),
         txt({ fontSize: 26, fontWeight: 700, color: COLORS.white, marginBottom: 24 }, displayName(name)),
         txt({ fontSize: 108, fontWeight: 700, color: COLORS.white, fontFamily: "monospace", letterSpacing: -2, lineHeight: 1, marginBottom: 8 }, String(currentRating)),
@@ -118,7 +118,7 @@ function ratingJourneyCard({ name, currentRating, yearAgoRating, change, domainL
 }
 
 function seasonScoreboardCard({ name, played, wins, draws, losses, scorePct }) {
-    return cardShell(COLORS.blue, ["rook"], [
+    return cardShell(COLORS.blue, ["knight"], [
         txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 8 }, "SEASON SCOREBOARD"),
         txt({ fontSize: 26, fontWeight: 700, color: COLORS.white, marginBottom: 28 }, displayName(name)),
         box({ gap: 56, alignItems: "flex-end", marginBottom: 32 }, [
@@ -146,7 +146,7 @@ function inGoodCompanyCard({ name, drawRate, gmName, gmDrawRate }) {
         : diff === 0
         ? "Exactly matching " + gmName + "'s career draw rate."
         : diff + "pp above " + gmName + "'s career average of " + gmDrawRate + "%."
-    return cardShell(COLORS.teal, ["knight", "queen", "king"], [
+    return cardShell(COLORS.teal, ["knight", "pawn"], [
         txt({ fontSize: 12, fontWeight: 700, color: COLORS.muted, letterSpacing: 4, marginBottom: 8 }, "IN GOOD COMPANY"),
         txt({ fontSize: 26, fontWeight: 700, color: COLORS.white, marginBottom: 24 }, displayName(name)),
         box({ alignItems: "flex-end", gap: 40, marginBottom: 24 }, [
