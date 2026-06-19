@@ -387,7 +387,20 @@ export default async function handler(req, res) {
 
             const playerCount = Object.keys(graph).length
             const target = "Adams, Michael"
-            const start = searchName
+
+            // Try exact match first, then fall back to surname-only match
+            // (LMS name on match sheets may differ slightly from ECF full_name)
+            let start = searchName
+            if (!graph[start]) {
+                const searchSurname = searchName.includes(",")
+                    ? searchName.split(",")[0].trim().toLowerCase()
+                    : searchName.split(" ").slice(-1)[0].toLowerCase()
+                const surnameMatch = Object.keys(graph).find(k => {
+                    const ks = k.includes(",") ? k.split(",")[0].trim().toLowerCase() : k.split(" ").slice(-1)[0].toLowerCase()
+                    return ks === searchSurname
+                })
+                if (surnameMatch) start = surnameMatch
+            }
 
             if (!graph[start]) {
                 return res.status(200).json({
@@ -435,6 +448,7 @@ export default async function handler(req, res) {
             res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate")
             return res.status(200).json({
                 full_name: searchName,
+                matched_lms_name: start !== searchName ? start : null,
                 found: true,
                 degrees,
                 target,
