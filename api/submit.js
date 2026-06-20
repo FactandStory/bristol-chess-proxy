@@ -39,6 +39,8 @@ const AIRTABLE_BASE = "appSaO5ImcmzC2lag"
 const SUBMISSION_TYPES = {
     game: {
         table: "Notable Games",
+        // The moderation gate field for this type — created false (unapproved).
+        moderationField: "Approved",
         // form key → Airtable field name (exact, from the live table)
         fields: {
             white: "White",
@@ -75,7 +77,46 @@ const SUBMISSION_TYPES = {
         validatePgn: true, // pgn must parse as a real game
         validateSubmitterEcf: true, // submitter ECF must look like an ECF code
     },
-    // event:   { ... }   ← add later
+    event: {
+        table: "Events",
+        // Events use a different moderation gate than games.
+        moderationField: "Show on Site",
+        // form key → Airtable field name (exact, from the Events table)
+        fields: {
+            name: "Event Name",
+            date: "Date",
+            endDate: "End Date",
+            location: "Location",
+            eventType: "Type",
+            format: "Format",
+            timeControl: "Time Control",
+            ratingQual: "Rating Qualification",
+            link: "Link",
+            description: "Description",
+            submitterName: "Submitter Name",
+            submitterEmail: "Submitter Email",
+            submitterClub: "Submitter Club",
+            submitterEcf: "Submitter ECF Code",
+        },
+        numeric: [],
+        required: [
+            "name",
+            "date",
+            "location",
+            "eventType",
+            "submitterName",
+            "submitterEmail",
+            "submitterClub",
+            "submitterEcf",
+        ],
+        // Single-select fields → submitted value must match the Airtable options.
+        selectOptions: {
+            eventType: ["Competitive Play", "Social Play", "Other"],
+            format: ["Standard", "Rapid", "Blitz"],
+        },
+        validatePgn: false,
+        validateSubmitterEcf: true,
+    },
     // gallery: { ... }   ← add later
 }
 
@@ -191,13 +232,29 @@ export default async function handler(req, res) {
         }
     }
 
-    // 5) Result must be a valid option (if provided)
-    if (body.result && !cfg.resultOptions.includes(String(body.result).trim())) {
+    // 5) Result must be a valid option (games — if provided)
+    if (cfg.resultOptions && body.result && !cfg.resultOptions.includes(String(body.result).trim())) {
         return res.status(400).json({
             ok: false,
             error: `Result must be one of: ${cfg.resultOptions.join(", ")}`,
             field: "result",
         })
+    }
+
+    // 5b) Generic single-select validation — any submitted value for a field
+    // in selectOptions must match one of the Airtable options exactly (so we
+    // never create stray options). Blank is allowed unless the field is required.
+    if (cfg.selectOptions) {
+        for (const [key, opts] of Object.entries(cfg.selectOptions)) {
+            const v = clean(body[key], MAX_LEN.short)
+            if (v && !opts.includes(v)) {
+                return res.status(400).json({
+                    ok: false,
+                    error: `${key} must be one of: ${opts.join(", ")}`,
+                    field: key,
+                })
+            }
+        }
     }
 
     // 6) PGN must parse as a real game
@@ -239,9 +296,10 @@ export default async function handler(req, res) {
                   : MAX_LEN.short
         fields[airtableName] = clean(val, cap)
     }
-    // Always land UNAPPROVED. (Submitted At is a Created-time field Airtable
-    // stamps automatically — we don't set it.)
-    fields["Approved"] = false
+    // Always land UNMODERATED. The gate field is per-type (Approved for games,
+    // Show on Site for events) so each lands invisible until the editor ticks
+    // it in Airtable. (Submitted At is a Created-time field Airtable stamps.)
+    if (cfg.moderationField) fields[cfg.moderationField] = false
 
     // 9) Create the row.
     try {
