@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Vercel proxy for Bristol Chess Hub — LMS and ECF API relay",
   "dependencies": {
-    "@vercel/og": "^0.6.2"
+    "@vercel/og": "^0.6.2",
+    "chess.js": "^1.4.0"
   }
 }
