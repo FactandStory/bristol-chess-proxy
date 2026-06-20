@@ -55,7 +55,7 @@ const SUBMISSION_TYPES = {
             submitterName: "Submitter Name",
             submitterEmail: "Submitter Email",
             submitterClub: "Submitter Club",
-            submitterEcf: "Submitter ECF Number",
+            submitterEcf: "Submitter ECF Code",
         },
         // numeric fields (cast to Number before sending to Airtable)
         numeric: ["whiteRating", "blackRating"],
@@ -111,7 +111,7 @@ function validPgn(pgn) {
     }
 }
 
-// ECF codes are canonically 6 digits + a letter (e.g. 123456A). Be forgiving:
+// ECF rating codes are canonically 6 digits + a letter (e.g. 375391J). Be forgiving:
 // strip spaces/hyphens, uppercase, then test the canonical shape. We don't
 // verify the code is a *live* ECF member (that's a separate lookup, and you
 // eyeball every submission anyway) — this is a format/spam gate only.
@@ -216,7 +216,7 @@ export default async function handler(req, res) {
     if (cfg.validateSubmitterEcf && !validEcf(body.submitterEcf)) {
         return res.status(400).json({
             ok: false,
-            error: "Please enter a valid ECF code (6 digits and a letter, e.g. 123456A).",
+            error: "Please enter a valid ECF rating code (6 digits and a letter, e.g. 375391J).",
             field: "submitterEcf",
         })
     }
