@@ -48,8 +48,12 @@ async function fetchRaw(token) {
             `https://api.airtable.com/v0/${AIRTABLE_BASE}/${encodeURIComponent(AIRTABLE_TABLE)}`
         )
         url.searchParams.set("pageSize", "100")
-        // Server-side filter: only approved rows ever leave Airtable.
-        url.searchParams.set("filterByFormula", "{Approved}=1")
+        // Server-side filter: only approved rows. Use TRUE() — Airtable
+        // checkboxes are booleans, and ={Approved}=1 can fail to match
+        // depending on how the checkbox value is represented. We ALSO filter in
+        // code below (belt-and-braces) so a formula quirk can't silently hide
+        // everything.
+        url.searchParams.set("filterByFormula", "{Approved}=TRUE()")
         if (offset) url.searchParams.set("offset", offset)
         const r = await fetch(url.toString(), {
             headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
@@ -100,7 +104,12 @@ export default async function handler(req, res) {
     try {
         const { records, hit } = await fetchRaw(token)
         const games = records
-            .map(mapGame)
+            .map((rec) => ({ rec, g: mapGame(rec) }))
+            // Belt-and-braces: keep only rows whose Approved field is truthy,
+            // regardless of how the server-side formula matched. Airtable omits
+            // an unticked checkbox entirely and sends `true` when ticked.
+            .filter(({ rec }) => rec.fields && rec.fields[FIELD.approved] === true)
+            .map(({ g }) => g)
             // Defensive: only keep rows with an actual PGN (an approved-but-empty
             // row shouldn't render a broken board).
             .filter((g) => g.pgn && g.pgn.trim().length > 0)
