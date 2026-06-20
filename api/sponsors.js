@@ -36,6 +36,7 @@ const FIELD = {
     logo: "Logo", // Attachment field
     tier: "Tier", // single-select: Headline | Supporter
     active: "Active", // checkbox
+    description: "Description", // long text — shown on the /sponsors page only
 }
 
 async function fetchSponsorsRaw(token) {
@@ -93,6 +94,7 @@ function mapSponsor(rec) {
         website: f[FIELD.website] || null,
         logo: firstAttachmentUrl(f[FIELD.logo]),
         tier: f[FIELD.tier] || null,
+        description: f[FIELD.description] || null,
     }
 }
 
