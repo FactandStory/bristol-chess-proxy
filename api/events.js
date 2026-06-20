@@ -28,6 +28,10 @@
 const AIRTABLE_BASE = "appSaO5ImcmzC2lag"
 const AIRTABLE_TABLE = "Events"
 
+// The single Type value that defines the competitive stream. Everything else
+// (Social Play, Other, blank) is treated as social — see the stream filter.
+const COMPETITIVE_TYPE = "Competitive Play"
+
 // Short raw-fetch cache — see header note on why this is much shorter than ecf.js
 const CACHE = {}
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
@@ -145,6 +149,8 @@ export default async function handler(req, res) {
     try {
         const { records, hit } = await fetchEventsRaw(token)
         const today = todayYMD()
+        // Which stream the caller wants: "competitive", "social", or neither.
+        const stream = (req.query.stream || "").toLowerCase()
 
         const events = records
             .map(mapEvent)
@@ -163,6 +169,17 @@ export default async function handler(req, res) {
                 const effectiveEnd = ymd(e.end_date) || ymd(e.date)
                 if (!effectiveEnd) return false // no usable date → can't place it, omit
                 return effectiveEnd >= today
+            })
+            // Stream filter (?stream=competitive | social). The competitive
+            // stream is STRICTLY "Competitive Play"; the social stream is
+            // everything else (Social Play, Other, and — deliberately — any
+            // blank or mistyped Type). Defaulting "not competitive" to social
+            // means a forgotten Type never makes an event vanish; it just lands
+            // in social. No stream param = return everything (back-compat).
+            .filter((e) => {
+                if (stream === "competitive") return e.type === COMPETITIVE_TYPE
+                if (stream === "social") return e.type !== COMPETITIVE_TYPE
+                return true
             })
             // Soonest first, by start date. Events with no parseable date were
             // already dropped above, so every remaining item has one.
