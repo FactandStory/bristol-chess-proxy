@@ -117,7 +117,32 @@ const SUBMISSION_TYPES = {
         validatePgn: false,
         validateSubmitterEcf: true,
     },
-    // gallery: { ... }   ← add later
+    gallery: {
+        table: "Gallery",
+        moderationField: "Approved",
+        fields: {
+            imageUrl: "Image URL",
+            caption: "Caption",
+            event: "Event",
+            submitterName: "Submitter Name",
+            submitterEmail: "Submitter Email",
+            submitterClub: "Submitter Club",
+            submitterEcf: "Submitter ECF Code",
+        },
+        numeric: [],
+        required: [
+            "imageUrl",
+            "submitterName",
+            "submitterEmail",
+            "submitterClub",
+            "submitterEcf",
+        ],
+        validatePgn: false,
+        validateSubmitterEcf: true,
+        // The image URL must be a Cloudinary URL on OUR cloud — prevents the
+        // endpoint being used to inject arbitrary external image links.
+        urlField: { key: "imageUrl", mustStartWith: "https://res.cloudinary.com/daypxtk2d/" },
+    },
 }
 
 // ── Limits ───────────────────────────────────────────────────────────────────
@@ -257,6 +282,19 @@ export default async function handler(req, res) {
         }
     }
 
+    // 5c) URL field must point at our own storage (gallery image URL) — stops
+    // the endpoint being used to inject arbitrary external image links.
+    if (cfg.urlField) {
+        const v = clean(body[cfg.urlField.key], 2000)
+        if (!v.startsWith(cfg.urlField.mustStartWith)) {
+            return res.status(400).json({
+                ok: false,
+                error: "The image upload didn't complete correctly. Please re-select your photo and try again.",
+                field: cfg.urlField.key,
+            })
+        }
+    }
+
     // 6) PGN must parse as a real game
     if (cfg.validatePgn) {
         const pgn = clean(body.pgn, MAX_LEN.pgn)
@@ -293,7 +331,9 @@ export default async function handler(req, res) {
                 ? MAX_LEN.pgn
                 : formKey === "description"
                   ? MAX_LEN.description
-                  : MAX_LEN.short
+                  : formKey === "imageUrl" || formKey === "link"
+                    ? 2000 // URLs can be long (Cloudinary, entry links)
+                    : MAX_LEN.short
         fields[airtableName] = clean(val, cap)
     }
     // Always land UNMODERATED. The gate field is per-type (Approved for games,
