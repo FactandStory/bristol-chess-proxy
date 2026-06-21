@@ -256,6 +256,89 @@ export default async function handler(req, res) {
         }
     }
 
+    // Special action: peak Standard rating reached within a window.
+    // window=month → highest rating across the last ~30 days
+    // window=season → highest rating reached since the season start (1 Sept)
+    // "Peak" here means the highest of the player's dated rating snapshots in
+    // the window (ECF only re-rates on graded games, so snapshots ARE the
+    // rating between games). Reuses the same cheap dated-rating fetch the
+    // other actions use; cached 24h.
+    if (action === "bristol_peak") {
+        try {
+            const allPlayers = await getAllBristolPlayers()
+            const players = allPlayers.filter(p => p.std_current !== null)
+
+            const windowParam = (req.query.window || "month").toLowerCase()
+            const useSeason = windowParam === "season"
+
+            // Build the list of snapshot dates spanning the window.
+            const today = new Date()
+            const dates = []
+            if (useSeason) {
+                // 1st of each month from season start (1 Sept) to now, + today
+                const start = new Date(getSeasonStartDate())
+                const cursor = new Date(start.getFullYear(), start.getMonth(), 1)
+                while (cursor <= today) {
+                    dates.push(cursor.toISOString().split("T")[0])
+                    cursor.setMonth(cursor.getMonth() + 1)
+                }
+                dates.push(today.toISOString().split("T")[0])
+            } else {
+                // last ~30 days: today, and ~2 and ~4 weeks back, to catch a
+                // recent peak even if it has since dipped
+                for (const daysBack of [0, 14, 30]) {
+                    const d = new Date(today)
+                    d.setDate(d.getDate() - daysBack)
+                    dates.push(d.toISOString().split("T")[0])
+                }
+            }
+            const uniqueDates = Array.from(new Set(dates))
+
+            // Only consider the strongest ~100 players (peak lists are top-end)
+            const top100 = players
+                .sort((a, b) => b.std_current - a.std_current)
+                .slice(0, 100)
+
+            const peaks = await Promise.all(
+                top100.map(async p => {
+                    const snaps = await Promise.all(
+                        uniqueDates.map(date =>
+                            fetchECF(`v2/ratings/S/${p.ecf_code}/${date}`)
+                                .then(r => parseRevisedRating(r.data))
+                                .catch(() => null)
+                        )
+                    )
+                    const valid = snaps.filter(v => v !== null)
+                    // include current rating as a candidate too
+                    if (p.std_current !== null) valid.push(p.std_current)
+                    const peak = valid.length ? Math.max(...valid) : null
+                    return peak === null
+                        ? null
+                        : {
+                              ecf_code: p.ecf_code,
+                              full_name: p.full_name,
+                              club: p.club,
+                              std: peak,
+                              std_current: p.std_current,
+                          }
+                })
+            )
+
+            const ranked = peaks
+                .filter(Boolean)
+                .sort((a, b) => b.std - a.std)
+
+            res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
+            return res.status(200).json({
+                players: ranked,
+                window: useSeason ? "season" : "month",
+                total: ranked.length,
+            })
+        } catch (err) {
+            return res.status(500).json({ error: err.message })
+        }
+    }
+
     // Special action: fetch 12-month trajectory data for Bristol players across all rating bands
     if (action === "bristol_trajectory") {
         try {
