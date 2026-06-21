@@ -140,6 +140,18 @@ function getYearAgoDate() {
     return yearAgo.toISOString().split("T")[0]
 }
 
+// Start of the current chess season (1 September). The Bristol & District
+// season runs Sept–spring, so before September we're still in last year's
+// season; from September we're in the new one. Used by bristol_improvement's
+// season window so "improvement this season" compares against the player's
+// rating at the season's start.
+function getSeasonStartDate() {
+    const now = new Date()
+    const seasonStartYear =
+        now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1
+    return `${seasonStartYear}-09-01`
+}
+
 function parseRevisedRating(hist) {
     if (!hist) return null
     // ECF returns revised_rating for established ratings (A/K category)
@@ -186,10 +198,18 @@ export default async function handler(req, res) {
             const allPlayers = await getAllBristolPlayers()
             const players = allPlayers.filter(p => p.std_current !== null)
 
-            // Get previous month's date (1st of last month)
+            // window=month (default) compares vs the 1st of last month (the
+            // existing 30-day behaviour). window=season compares vs the rating
+            // at the start of the current season (1 Sept) — used over the
+            // summer when the monthly window is empty.
+            const windowParam = (req.query.window || "month").toLowerCase()
+            const useSeason = windowParam === "season"
+
             const now = new Date()
             const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-            const prevDate = prevMonth.toISOString().split("T")[0]
+            const refDate = useSeason
+                ? getSeasonStartDate()
+                : prevMonth.toISOString().split("T")[0]
 
             // Fetch historical ratings for each player (top 100 by current rating)
             const top100 = players
@@ -198,7 +218,7 @@ export default async function handler(req, res) {
 
             const historyResults = await Promise.all(
                 top100.map(p =>
-                    fetchECF(`v2/ratings/S/${p.ecf_code}/${prevDate}`)
+                    fetchECF(`v2/ratings/S/${p.ecf_code}/${refDate}`)
                         .then(r => ({ ecf: p.ecf_code, prev: r.data }))
                         .catch(() => ({ ecf: p.ecf_code, prev: null }))
                 )
@@ -225,7 +245,12 @@ export default async function handler(req, res) {
             improved.sort((a, b) => b.delta - a.delta)
 
             res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
-            return res.status(200).json({ players: improved, prev_date: prevDate })
+            return res.status(200).json({
+                players: improved,
+                window: useSeason ? "season" : "month",
+                ref_date: refDate,
+                prev_date: refDate, // kept for backwards-compat with existing callers
+            })
         } catch (err) {
             return res.status(500).json({ error: err.message })
         }
