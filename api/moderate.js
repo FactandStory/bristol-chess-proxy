@@ -9,18 +9,25 @@
 //     — no second credential, no token in the browser.
 //
 // SECURITY:
-//   - Every link carries an HMAC-SHA256 token over `${type}:${id}:${action}`,
-//     signed with MODERATE_SECRET (server-only). A link can't be forged or
-//     re-pointed at another record/action without the secret.
+//   - Every link carries a shared key (MODERATE_SECRET) checked server-side
+//     with a timing-safe compare. No valid key → the proxy refuses to act.
 //   - PREFETCH-SAFE: a GET (incl. mail-client link scanners) only ever renders
 //     a confirmation page — it NEVER writes. The change happens solely on the
-//     POST from the Confirm button, which scanners don't issue.
+//     POST from the Confirm button, which scanners don't issue. So a scanned or
+//     accidentally-tapped link cannot approve anything; a human must confirm.
+//   - The key lives only in Vercel and inside the alert emails — never on the
+//     site or in code. If you ever suspect it leaked, rotate it: change
+//     MODERATE_SECRET in Vercel + the key in the three Automation emails. Every
+//     old link dies instantly. Worst case before rotation is a visible,
+//     reversible wrong approval/rejection — no data access, no deletion.
 //
-// PREREQUISITES (Airtable, one-time):
-//   - Add a checkbox field "Rejected" to all three tables: Notable Games,
-//     Events, Gallery.
-//   - Add env var MODERATE_SECRET on Vercel (same value the Automation signs
-//     with). AIRTABLE_WRITE_TOKEN already exists.
+// PREREQUISITES (one-time):
+//   - Airtable: add a checkbox field "Rejected" to all three tables (Notable
+//     Games, Events, Gallery).
+//   - Vercel: env var MODERATE_SECRET (a long random ASCII string).
+//     AIRTABLE_WRITE_TOKEN already exists.
+//   - No Airtable "Run a script" step needed — works on the Free plan. The
+//     alert email builds the link from static text + the record-ID variable.
 
 import crypto from "crypto"
 
@@ -45,13 +52,6 @@ const COLORS = {
     green: "#34D17A",
     amber: "#E8A800",
     red: "#E8675A",
-}
-
-function sign(secret, type, id, action) {
-    return crypto
-        .createHmac("sha256", secret)
-        .update(`${type}:${id}:${action}`)
-        .digest("hex")
 }
 
 function safeEqual(a, b) {
@@ -82,7 +82,7 @@ ${bodyHtml}
 export default async function handler(req, res) {
     res.setHeader("Content-Type", "text/html; charset=utf-8")
 
-    const { type, id, action, token } = req.query || {}
+    const { type, id, action, key } = req.query || {}
     const secret = process.env.MODERATE_SECRET
 
     if (!secret) {
@@ -98,14 +98,14 @@ export default async function handler(req, res) {
 
     const cfg = TYPES[type]
     const validAction = action === "approve" || action === "reject"
-    const tokenOk =
+    const keyOk =
         cfg &&
         validAction &&
         id &&
-        token &&
-        safeEqual(token, sign(secret, type, id, action))
+        key &&
+        safeEqual(key, secret)
 
-    if (!tokenOk) {
+    if (!keyOk) {
         return res.status(400).send(
             page(
                 "Invalid link",
@@ -126,7 +126,7 @@ export default async function handler(req, res) {
             `type=${encodeURIComponent(type)}` +
             `&id=${encodeURIComponent(id)}` +
             `&action=${encodeURIComponent(action)}` +
-            `&token=${encodeURIComponent(token)}`
+            `&key=${encodeURIComponent(key)}`
         return res.status(200).send(
             page(
                 isApprove ? "Confirm approve" : "Confirm reject",
