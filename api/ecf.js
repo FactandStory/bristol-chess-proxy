@@ -233,6 +233,38 @@ function parseRevisedRating(hist) {
     return isNaN(n) || n === 0 ? null : n
 }
 
+// Run an async fn over items with a bounded number in flight at once. Used to
+// avoid firing several hundred simultaneous ECF requests (which gets the burst
+// rate-limited); a small pool sails through where a flood is throttled.
+async function mapLimit(items, limit, fn) {
+    const results = new Array(items.length)
+    let next = 0
+    async function worker() {
+        while (next < items.length) {
+            const idx = next++
+            results[idx] = await fn(items[idx], idx)
+        }
+    }
+    const pool = Math.min(limit, items.length)
+    await Promise.all(Array.from({ length: pool }, worker))
+    return results
+}
+
+// Fetch a single player's rating at a date, with retry on transient errors.
+// Returns the parsed rating, or null. A 200 with no rating (genuinely unrated
+// at that date) returns null WITHOUT retrying — only thrown errors retry.
+async function fetchRatingAt(code, date, letter, attempts = 3) {
+    for (let a = 0; a < attempts; a++) {
+        try {
+            const r = await fetchECF(`v2/ratings/${letter}/${code}/${date}`)
+            return parseRevisedRating(r.data)
+        } catch (e) {
+            if (a < attempts - 1) await new Promise(res => setTimeout(res, 200))
+        }
+    }
+    return null
+}
+
 export default async function handler(req, res) {
     res.setHeader("Access-Control-Allow-Origin", "*")
     res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS")
@@ -606,47 +638,48 @@ export default async function handler(req, res) {
             }
 
             const yearAgoDate = getYearAgoDate()
+            const letter = RATING_DOMAINS[domain].historyLetter
 
-            // Player's own year-ago rating, plus the full Bristol trajectory set so we
-            // can compute a Bristol-wide average delta. The Bristol set is the same
-            // shape bristol_trajectory builds, computed inline here rather than via a
-            // second HTTP round-trip, since fetchECF's own cache makes the repeated
-            // v2/ratings calls free on the 24h window.
             const ratedPlayers = allPlayers.filter(p => p.std_current !== null)
 
-            const historyResults = await Promise.all(
-                ratedPlayers.map(p =>
-                    fetchECF(`v2/ratings/${RATING_DOMAINS[domain].historyLetter}/${p.ecf_code}/${yearAgoDate}`)
-                        .then(r => ({ ecf: p.ecf_code, hist: r.data }))
-                        .catch(() => ({ ecf: p.ecf_code, hist: null }))
-                )
-            )
+            // Bristol-wide year-ago ratings, for the average-change comparison.
+            // Fetched with BOUNDED concurrency + per-call retry rather than one
+            // giant Promise.all: firing several hundred simultaneous requests at
+            // ECF gets the burst rate-limited, and with failures swallowed the
+            // whole cohort silently collapsed to zero — which also dragged the
+            // viewed player's own baseline to null and mislabelled established
+            // players as "new". A small in-flight pool holds up on a cold cache.
+            const cohort = await mapLimit(ratedPlayers, 20, async (p) => ({
+                ecf: p.ecf_code,
+                std_current: p.std_current,
+                yearAgo: await fetchRatingAt(p.ecf_code, yearAgoDate, letter),
+            }))
 
             let bristolDeltaSum = 0
             let bristolDeltaCount = 0
             let playerYearAgoRating = null
 
-            historyResults.forEach(({ ecf, hist }) => {
-                const p = ratedPlayers.find(pp => pp.ecf_code === ecf)
-                if (!p || !hist) return
-                const yearAgoRating = parseRevisedRating(hist)
-                if (!yearAgoRating) return
-                const delta = p.std_current - yearAgoRating
-                bristolDeltaSum += delta
+            cohort.forEach(({ ecf, std_current, yearAgo }) => {
+                if (yearAgo === null) return
+                bristolDeltaSum += std_current - yearAgo
                 bristolDeltaCount += 1
-                if (ecf === ecf_code) playerYearAgoRating = yearAgoRating
+                if (ecf === ecf_code) playerYearAgoRating = yearAgo
             })
 
             const bristolAvgDelta = bristolDeltaCount > 0
                 ? Math.round(bristolDeltaSum / bristolDeltaCount)
                 : 0
 
-            // No year-ago Standard rating found — could mean genuinely new to ratings,
-            // OR could mean they started playing Standard after the year-ago date.
-            // Before flagging as new, check if they have ANY historical rating within
-            // the past 24 months — if so, use the earliest available point instead.
+            // Decoupled safety net: the viewed player's own baseline must never
+            // depend on the cohort fetch succeeding. If it didn't come back above,
+            // fetch it directly (retried) before resorting to the new-player path.
             if (playerYearAgoRating === null) {
-                // Try monthly snapshots going back 24 months to find the earliest rating
+                playerYearAgoRating = await fetchRatingAt(ecf_code, yearAgoDate, letter)
+            }
+
+            // Before flagging as new, look back up to 24 months for any earlier
+            // rating (they may have started Standard after the year-ago date).
+            if (playerYearAgoRating === null) {
                 const fallbackDates = []
                 const now = new Date()
                 for (let i = 1; i <= 24; i++) {
@@ -655,22 +688,16 @@ export default async function handler(req, res) {
                     d.setDate(1)
                     fallbackDates.push(d.toISOString().split("T")[0])
                 }
-                const fallbackResults = await Promise.all(
-                    fallbackDates.map(date =>
-                        fetchECF(`v2/ratings/${RATING_DOMAINS[domain].historyLetter}/${ecf_code}/${date}`)
-                            .then(r => ({ date, rating: parseRevisedRating(r.data) }))
-                            .catch(() => ({ date, rating: null }))
-                    )
-                )
-                // Find the earliest month they had a rating
+                const fallbackResults = await mapLimit(fallbackDates, 6, async (date) => ({
+                    date, rating: await fetchRatingAt(ecf_code, date, letter),
+                }))
                 const firstRated = fallbackResults.slice().reverse().find(p => p.rating !== null)
-                if (firstRated) {
-                    // They have history — use the earliest available rating as the baseline
-                    playerYearAgoRating = firstRated.rating
-                }
+                if (firstRated) playerYearAgoRating = firstRated.rating
             }
 
-            // Still no rating found anywhere in past 24 months — genuinely new player
+            // Genuinely no rating anywhere in the past 24 months — new player.
+            // Cache this only briefly: a transient ECF wobble must not be able to
+            // pin a "new" verdict for a whole day (the bug we just chased).
             if (playerYearAgoRating === null) {
                 const payload = {
                     ecf_code: player.ecf_code,
@@ -686,14 +713,12 @@ export default async function handler(req, res) {
                     domain,
                     domain_label: RATING_DOMAINS[domain].label,
                 }
-                CACHE[cacheKey] = { data: payload, ts: Date.now() }
-                res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
+                res.setHeader("Cache-Control", "s-maxage=600, stale-while-revalidate")
                 return res.status(200).json(payload)
             }
 
-            // Fetch monthly rating snapshots for the player's own sparkline.
-            // 13 date points (1st of each month for past 12 months + current)
-            // run in parallel and are cached 24h — fast and cheap.
+            // Monthly snapshots for the player's own sparkline (13 points),
+            // bounded + retried for the same resilience reason.
             const monthlyDates = []
             const today = new Date()
             for (let i = 12; i >= 0; i--) {
@@ -702,19 +727,13 @@ export default async function handler(req, res) {
                 d.setDate(1)
                 monthlyDates.push(d.toISOString().split("T")[0])
             }
+            const monthlyRatings = await mapLimit(monthlyDates, 8, async (date) => ({
+                date, rating: await fetchRatingAt(ecf_code, date, letter),
+            }))
 
-            const monthlyRatings = await Promise.all(
-                monthlyDates.map(date =>
-                    fetchECF(`v2/ratings/${RATING_DOMAINS[domain].historyLetter}/${ecf_code}/${date}`)
-                        .then(r => ({ date, rating: parseRevisedRating(r.data) }))
-                        .catch(() => ({ date, rating: null }))
-                )
-            )
-
-            // Filter to points where a rating exists, deduplicate consecutive
-            // identical values (ECF only publishes when a game is graded, so
-            // many months will repeat the previous value — we keep unique
-            // turning points for a cleaner sparkline).
+            // Keep points where a rating exists, dropping consecutive duplicates
+            // (ECF republishes the same value between graded games) for a cleaner
+            // sparkline that shows only the turning points.
             const historyPoints = monthlyRatings
                 .filter(p => p.rating !== null)
                 .filter((p, i, arr) => i === 0 || p.rating !== arr[i - 1].rating)
@@ -735,9 +754,16 @@ export default async function handler(req, res) {
                 history: historyPoints,  // [{date, rating}, ...] for sparkline
             }
 
-            CACHE[cacheKey] = { data: payload, ts: Date.now() }
-
-            res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
+            // Only persist the long-lived cache when the cohort actually
+            // populated. If it came back empty (ECF degraded for this request),
+            // keep the player's correct journey but let it revalidate soon rather
+            // than freezing a zero cohort for 24h.
+            if (bristolDeltaCount > 0) {
+                CACHE[cacheKey] = { data: payload, ts: Date.now() }
+                res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
+            } else {
+                res.setHeader("Cache-Control", "s-maxage=600, stale-while-revalidate")
+            }
             return res.status(200).json(payload)
         } catch (err) {
             return res.status(500).json({ error: err.message })
