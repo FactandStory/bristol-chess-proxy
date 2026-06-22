@@ -265,6 +265,24 @@ async function fetchRatingAt(code, date, letter, attempts = 3) {
     return null
 }
 
+// Like fetchRatingAt, but distinguishes a GENUINE "no rating at this date" (a
+// clean 200 carrying no value — i.e. the player really was unrated then) from a
+// transient fetch ERROR. This matters for the viewed player's own baseline:
+// we must never substitute a different month's rating just because one request
+// failed — that is exactly what flattened an established improver to a tiny
+// change. Returns { rating: number|null, errored: boolean }.
+async function fetchRating(code, date, letter, attempts = 4) {
+    for (let a = 0; a < attempts; a++) {
+        try {
+            const r = await fetchECF(`v2/ratings/${letter}/${code}/${date}`)
+            return { rating: parseRevisedRating(r.data), errored: false }
+        } catch (e) {
+            if (a < attempts - 1) await new Promise(res => setTimeout(res, 200))
+        }
+    }
+    return { rating: null, errored: true }
+}
+
 export default async function handler(req, res) {
     res.setHeader("Access-Control-Allow-Origin", "*")
     res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS")
@@ -640,46 +658,20 @@ export default async function handler(req, res) {
             const yearAgoDate = getYearAgoDate()
             const letter = RATING_DOMAINS[domain].historyLetter
 
-            const ratedPlayers = allPlayers.filter(p => p.std_current !== null)
+            // --- The viewed player's OWN baseline, fetched FIRST and in isolation,
+            // before the cohort burst, so it can never be a casualty of request
+            // contention. Retried hard; an isolated call to this endpoint is
+            // reliable. fetchRating distinguishes a genuine blank from an error. ---
+            const own = await fetchRating(ecf_code, yearAgoDate, letter, 5)
+            let playerYearAgoRating = own.rating
 
-            // Bristol-wide year-ago ratings, for the average-change comparison.
-            // Fetched with BOUNDED concurrency + per-call retry rather than one
-            // giant Promise.all: firing several hundred simultaneous requests at
-            // ECF gets the burst rate-limited, and with failures swallowed the
-            // whole cohort silently collapsed to zero — which also dragged the
-            // viewed player's own baseline to null and mislabelled established
-            // players as "new". A small in-flight pool holds up on a cold cache.
-            const cohort = await mapLimit(ratedPlayers, 20, async (p) => ({
-                ecf: p.ecf_code,
-                std_current: p.std_current,
-                yearAgo: await fetchRatingAt(p.ecf_code, yearAgoDate, letter),
-            }))
-
-            let bristolDeltaSum = 0
-            let bristolDeltaCount = 0
-            let playerYearAgoRating = null
-
-            cohort.forEach(({ ecf, std_current, yearAgo }) => {
-                if (yearAgo === null) return
-                bristolDeltaSum += std_current - yearAgo
-                bristolDeltaCount += 1
-                if (ecf === ecf_code) playerYearAgoRating = yearAgo
-            })
-
-            const bristolAvgDelta = bristolDeltaCount > 0
-                ? Math.round(bristolDeltaSum / bristolDeltaCount)
-                : 0
-
-            // Decoupled safety net: the viewed player's own baseline must never
-            // depend on the cohort fetch succeeding. If it didn't come back above,
-            // fetch it directly (retried) before resorting to the new-player path.
-            if (playerYearAgoRating === null) {
-                playerYearAgoRating = await fetchRatingAt(ecf_code, yearAgoDate, letter)
-            }
-
-            // Before flagging as new, look back up to 24 months for any earlier
-            // rating (they may have started Standard after the year-ago date).
-            if (playerYearAgoRating === null) {
+            // Walk back up to 24 months for an earlier baseline ONLY when the
+            // year-ago lookup was a GENUINE blank (a clean 200 with no rating, i.e.
+            // truly unrated then) — never on a fetch error. And only adopt months
+            // that themselves came back genuine, not errored. This is the guard
+            // that stops a failed fetch masquerading as a year-ago baseline (which
+            // had flattened a +300 improver to +9).
+            if (playerYearAgoRating === null && !own.errored) {
                 const fallbackDates = []
                 const now = new Date()
                 for (let i = 1; i <= 24; i++) {
@@ -689,16 +681,32 @@ export default async function handler(req, res) {
                     fallbackDates.push(d.toISOString().split("T")[0])
                 }
                 const fallbackResults = await mapLimit(fallbackDates, 6, async (date) => ({
-                    date, rating: await fetchRatingAt(ecf_code, date, letter),
+                    date, ...(await fetchRating(ecf_code, date, letter, 3)),
                 }))
-                const firstRated = fallbackResults.slice().reverse().find(p => p.rating !== null)
+                // earliest month that returned a GENUINE rating (oldest first)
+                const firstRated = fallbackResults
+                    .slice()
+                    .reverse()
+                    .find(p => !p.errored && p.rating !== null)
                 if (firstRated) playerYearAgoRating = firstRated.rating
             }
 
             // Genuinely no rating anywhere in the past 24 months — new player.
-            // Cache this only briefly: a transient ECF wobble must not be able to
-            // pin a "new" verdict for a whole day (the bug we just chased).
+            // (If the year-ago lookup errored rather than blanked, we did NOT run
+            // the fallback above, so we won't mislabel; we fall through to a
+            // short-cached new payload that revalidates quickly instead of pinning
+            // a wrong verdict for a day.)
             if (playerYearAgoRating === null) {
+                const ratedForAvg = allPlayers.filter(p => p.std_current !== null)
+                const avgCohort = await mapLimit(ratedForAvg, 20, async (p) => ({
+                    std_current: p.std_current,
+                    yearAgo: await fetchRatingAt(p.ecf_code, yearAgoDate, letter),
+                }))
+                let s = 0, c = 0
+                avgCohort.forEach(({ std_current, yearAgo }) => {
+                    if (yearAgo === null) return
+                    s += std_current - yearAgo; c += 1
+                })
                 const payload = {
                     ecf_code: player.ecf_code,
                     full_name: player.full_name,
@@ -706,8 +714,8 @@ export default async function handler(req, res) {
                     std_current: player.std_current,
                     std_year_ago: null,
                     delta: null,
-                    bristol_avg_delta: bristolAvgDelta,
-                    bristol_sample_size: bristolDeltaCount,
+                    bristol_avg_delta: c > 0 ? Math.round(s / c) : 0,
+                    bristol_sample_size: c,
                     year_ago_date: yearAgoDate,
                     is_new_player: true,
                     domain,
@@ -718,7 +726,8 @@ export default async function handler(req, res) {
             }
 
             // Monthly snapshots for the player's own sparkline (13 points),
-            // bounded + retried for the same resilience reason.
+            // bounded + retried. Fetched for the viewed player only — small and
+            // independent of the cohort.
             const monthlyDates = []
             const today = new Date()
             for (let i = 12; i >= 0; i--) {
@@ -737,6 +746,26 @@ export default async function handler(req, res) {
             const historyPoints = monthlyRatings
                 .filter(p => p.rating !== null)
                 .filter((p, i, arr) => i === 0 || p.rating !== arr[i - 1].rating)
+
+            // --- Bristol-wide average change, for the comparison line. Computed
+            // AFTER the player's own data so it can never affect his verdict.
+            // Bounded concurrency + retry; a partial/empty result degrades the
+            // average gracefully but leaves the player's journey intact. ---
+            const ratedPlayers = allPlayers.filter(p => p.std_current !== null)
+            const cohort = await mapLimit(ratedPlayers, 20, async (p) => ({
+                std_current: p.std_current,
+                yearAgo: await fetchRatingAt(p.ecf_code, yearAgoDate, letter),
+            }))
+            let bristolDeltaSum = 0
+            let bristolDeltaCount = 0
+            cohort.forEach(({ std_current, yearAgo }) => {
+                if (yearAgo === null) return
+                bristolDeltaSum += std_current - yearAgo
+                bristolDeltaCount += 1
+            })
+            const bristolAvgDelta = bristolDeltaCount > 0
+                ? Math.round(bristolDeltaSum / bristolDeltaCount)
+                : 0
 
             const payload = {
                 ecf_code: player.ecf_code,
