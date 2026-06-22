@@ -110,6 +110,69 @@ export default async function handler(req, res) {
     // against the supplied full_name, aggregates W/D/L, and reports a
     // confidence level on the name match rather than presenting a guess as
     // certain.
+    // Hero headline figure: the biggest giant-killing of the season so far —
+    // the completed game with the largest (loser_rating − winner_rating) gap,
+    // i.e. the lowest-rated player to beat the highest-rated opponent. Ratings
+    // are carried inline on each board (hrating/arating), so this is exact and
+    // needs no name↔rating cross-matching. Scans all 7 divisions, cached.
+    if (action === "biggest_upset") {
+        try {
+            const divisionResults = await Promise.all(
+                DIVISIONS.map(div =>
+                    fetchLmsMatch(div)
+                        .then(data => data)
+                        .catch(() => null)
+                )
+            )
+
+            let best = null // { winner, winnerRating, loser, loserRating, differential }
+
+            divisionResults.forEach(data => {
+                if (!data || !Array.isArray(data)) return
+                data.forEach(match => {
+                    if (!match || !Array.isArray(match.data)) return
+                    match.data.forEach(board => {
+                        const result = parseResult(board.result)
+                        if (!result || result === "draw") return
+                        const hr = parseRating(board.hrating)
+                        const ar = parseRating(board.arating)
+                        if (!hr || !ar) return
+
+                        // Identify winner/loser and their ratings from the result.
+                        const homeWon = result === "home"
+                        const winnerRating = homeWon ? hr : ar
+                        const loserRating = homeWon ? ar : hr
+                        const winner = homeWon ? board.hname : board.aname
+                        const loser = homeWon ? board.aname : board.hname
+
+                        // An upset = lower-rated player won. Differential is how
+                        // many points below the opponent the winner was.
+                        const differential = loserRating - winnerRating
+                        if (differential <= 0) return
+
+                        if (!best || differential > best.differential) {
+                            best = {
+                                winner: String(winner || "").trim(),
+                                winnerRating,
+                                loser: String(loser || "").trim(),
+                                loserRating,
+                                differential,
+                            }
+                        }
+                    })
+                })
+            })
+
+            res.setHeader(
+                "Cache-Control",
+                "s-maxage=1800, stale-while-revalidate"
+            )
+            return res.status(200).json({ upset: best })
+        } catch (err) {
+            return res.status(500).json({ error: err.message })
+        }
+    }
+
     if (action === "player_season") {
         if (!full_name) return res.status(400).json({ error: "Missing full_name parameter" })
 
