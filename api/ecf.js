@@ -140,6 +140,21 @@ function getYearAgoDate() {
     return yearAgo.toISOString().split("T")[0]
 }
 
+// 12 first-of-month dates spanning the rolling 12-month window, oldest first.
+// Index 0 == getYearAgoDate() (1st of this month last year); index 11 == 1st
+// of the current month. Used to fetch REAL monthly rating snapshots for the
+// trajectory sparkline so the line shows the true month-by-month shape rather
+// than an interpolated curve between two endpoints.
+function getTrajectoryMonths() {
+    const now = new Date()
+    const dates = []
+    for (let i = 11; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+        dates.push(d.toISOString().split("T")[0])
+    }
+    return dates
+}
+
 // Start of the current chess season (1 September). The Bristol & District
 // season runs Sept–spring, so before September we're still in last year's
 // season; from September we're in the new one. Used by bristol_improvement's
@@ -211,13 +226,19 @@ export default async function handler(req, res) {
                 ? getSeasonStartDate()
                 : prevMonth.toISOString().split("T")[0]
 
-            // Fetch historical ratings for each player (top 100 by current rating)
-            const top100 = players
+            // Fetch historical ratings for EVERY Bristol player (no rating
+            // cap). Most Improved is meritocratic: a lower-rated player who
+            // gained the most over the window deserves to rank above a
+            // higher-rated player who barely moved. This is the same
+            // all-players fan-out that bristol_trajectory already does, and
+            // it's protected by the 24h edge cache (s-maxage below) so the
+            // expensive fetch only runs on a cache miss / daily revalidation.
+            const pool = players
+                .slice()
                 .sort((a, b) => b.std_current - a.std_current)
-                .slice(0, 100)
 
             const historyResults = await Promise.all(
-                top100.map(p =>
+                pool.map(p =>
                     fetchECF(`v2/ratings/S/${p.ecf_code}/${refDate}`)
                         .then(r => ({ ecf: p.ecf_code, prev: r.data }))
                         .catch(() => ({ ecf: p.ecf_code, prev: null }))
@@ -227,7 +248,7 @@ export default async function handler(req, res) {
             // Build improvement list
             const improved = []
             historyResults.forEach(({ ecf, prev }) => {
-                const player = top100.find(p => p.ecf_code === ecf)
+                const player = pool.find(p => p.ecf_code === ecf)
                 if (!player || !prev) return
 
                 const prevRating = parseRevisedRating(prev)
@@ -377,10 +398,48 @@ export default async function handler(req, res) {
             // Sort by delta — biggest movers first
             trajectories.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
 
+            // --- Real monthly snapshots for the DISPLAYED players only ---
+            // Ranking above only needs the two endpoints (year-ago + current),
+            // so the 12-point monthly history is fetched only for the players
+            // actually shown: the top climbers and top fallers. This keeps the
+            // extra ECF calls bounded (~10 players × 2 sides × 10 mid-months)
+            // no matter how large the Bristol list grows. The component shows
+            // up to 10 of each, so we enrich 10 of each here.
+            const months = getTrajectoryMonths() // 12 month-start dates, oldest first
+            const DISPLAY_N = 10
+            const toEnrich = [
+                ...trajectories
+                    .filter(t => t.delta > 0)
+                    .sort((a, b) => b.delta - a.delta)
+                    .slice(0, DISPLAY_N),
+                ...trajectories
+                    .filter(t => t.delta < 0)
+                    .sort((a, b) => a.delta - b.delta)
+                    .slice(0, DISPLAY_N),
+            ]
+
+            await Promise.all(
+                toEnrich.map(async t => {
+                    // months[0] == year-ago (already known); months[11] == now
+                    // (std_current). Fetch the 10 real intermediate snapshots.
+                    // A month with no published rating comes back null and the
+                    // sparkline simply skips it — an honest gap, not a guess.
+                    const mid = await Promise.all(
+                        months.slice(1, 11).map(date =>
+                            fetchECF(`v2/ratings/S/${t.ecf_code}/${date}`)
+                                .then(r => parseRevisedRating(r.data))
+                                .catch(() => null)
+                        )
+                    )
+                    t.ratings = [t.std_year_ago, ...mid, t.std_current]
+                })
+            )
+
             res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
             return res.status(200).json({
                 players: trajectories,
                 year_ago_date: yearAgoDate,
+                months,
                 total: trajectories.length,
             })
         } catch (err) {
