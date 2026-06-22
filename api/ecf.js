@@ -822,57 +822,6 @@ export default async function handler(req, res) {
         }
     }
 
-    // TEMPORARY diagnostic: probe the year-ago ratings endpoint several ways so
-    // one request reveals exactly which call shape ECF accepts. Remove after use.
-    // Usage: ?action=debug_history&ecf_code=375391J
-    if (action === "debug_history") {
-        const code = ecf_code || "375391J"
-        const numeric = String(code).replace(/[^0-9]/g, "")
-        const yearAgo = getYearAgoDate()
-        const lastMonth = (() => {
-            const d = new Date()
-            d.setMonth(d.getMonth() - 1)
-            d.setDate(1)
-            return d.toISOString().split("T")[0]
-        })()
-
-        const headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "application/json",
-            "Referer": "https://rating.englishchess.org.uk/",
-        }
-
-        const probe = async (label, endpoint) => {
-            const url = `https://rating.englishchess.org.uk/v2/new/api.php?${endpoint}`
-            try {
-                const r = await fetch(url, { headers })
-                let body = null
-                let text = ""
-                try { body = await r.json() } catch { text = "(non-JSON body)" }
-                return {
-                    label,
-                    endpoint,
-                    status: r.status,
-                    ok: r.ok,
-                    keys: body && typeof body === "object" ? Object.keys(body).slice(0, 20) : null,
-                    parsed: body ? parseRevisedRating(body) : null,
-                    preview: body ? JSON.stringify(body).slice(0, 400) : text,
-                }
-            } catch (e) {
-                return { label, endpoint, error: String(e.message || e) }
-            }
-        }
-
-        const results = await Promise.all([
-            probe("A: with letter, year-ago", `v2/ratings/S/${code}/${yearAgo}`),
-            probe("B: numeric only, year-ago", `v2/ratings/S/${numeric}/${yearAgo}`),
-            probe("C: player lookup", `v2/players/code/${code}`),
-            probe("D: with letter, last month", `v2/ratings/S/${code}/${lastMonth}`),
-        ])
-
-        return res.status(200).json({ code, numeric, yearAgo, lastMonth, results })
-    }
-
     // Fetch a player's ECF game history — used by lms.js to get real game dates
     // for chronological ordering of the season dot sequence. Returns a list of
     // games with date, opponent name, result, and colour. Cached 24h since ECF
