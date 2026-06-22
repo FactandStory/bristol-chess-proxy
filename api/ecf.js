@@ -73,21 +73,76 @@ async function fetchECF(endpoint) {
 // null) even when they have a Standard rating — confirmed from real Bristol
 // club data, not assumed. This is expected and handled as null throughout,
 // not coerced to 0 or treated as an error.
+// Per-club last-known-good rosters (raw `data`), kept in memory so a transient
+// fetch failure can be BRIDGED rather than silently dropping a whole club's
+// players. This is deliberately NOT a blanket "freeze the old data" — a club
+// that genuinely returns an empty roster (e.g. a brand-new club ECF hasn't
+// populated yet) is reported as empty, never back-filled from stale data. We
+// only fall back to last-known-good when a fetch actually ERRORS, and we flag
+// it as stale so it's visible in the response, not silently frozen.
+const LAST_GOOD_ROSTER = {}
+
+// Diagnostics from the most recent getAllBristolPlayers() run: one entry per
+// club code with its load status and player count, so a missing or stale club
+// is SURFACED in the API response instead of silently vanishing.
+let LAST_ROSTER_DIAG = []
+
+// Fetch one club's roster with resilience. Distinguishes three real states:
+//   ok    — got players (refreshes last-known-good)
+//   empty — 200 response but zero players (a genuinely empty/new club — respect it)
+//   stale — all attempts errored, bridged from last-known-good (flagged, visible)
+//   error — all attempts errored and no last-known-good to fall back on
+async function fetchClubRoster(code) {
+    let lastErr = null
+    for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+            const r = await fetchECF(`v2/club_players/${code}`)
+            const rows = (r && r.data && r.data.players) || []
+            if (rows.length > 0) {
+                LAST_GOOD_ROSTER[code] = r.data
+                return { code, data: r.data, status: "ok", count: rows.length }
+            }
+            // 200 OK but no players: a genuinely empty roster (e.g. a new club
+            // not yet populated by ECF). Respect it — do NOT back-fill stale.
+            return { code, data: r.data, status: "empty", count: 0 }
+        } catch (e) {
+            lastErr = e
+            if (attempt < 2) await new Promise(res => setTimeout(res, 300))
+        }
+    }
+    // All attempts errored. Bridge with last-known-good if we have it, but mark
+    // it stale so it's visible — never silently freeze a whole club.
+    if (LAST_GOOD_ROSTER[code]) {
+        const rows = LAST_GOOD_ROSTER[code].players || []
+        return { code, data: LAST_GOOD_ROSTER[code], status: "stale", count: rows.length }
+    }
+    return {
+        code, data: null, status: "error", count: 0,
+        error: lastErr ? String(lastErr.message || lastErr) : "unknown",
+    }
+}
+
 async function getAllBristolPlayers(domain = "std") {
     const results = await Promise.all(
-        BRISTOL_CLUBS.map(code =>
-            fetchECF(`v2/club_players/${code}`)
-                .then(r => ({ ...r, clubCode: code }))
-                .catch(() => null)
-        )
+        BRISTOL_CLUBS.map(code => fetchClubRoster(code))
     )
+
+    // Record per-club status so callers (and humans) can see exactly which
+    // clubs loaded, which were empty, and which fell back to stale data.
+    LAST_ROSTER_DIAG = results.map(r => ({
+        club: clubName(r.code, ""),
+        code: r.code,
+        count: r.count,
+        status: r.status,
+    }))
 
     const seen = new Set()
     const players = []
 
     results.forEach(result => {
         if (!result || !result.data) return
-        const { data, clubCode } = result
+        const { data } = result
+        const clubCode = result.code
         const cols = data.column_names || []
         const rows = data.players || []
         const idx = {
@@ -190,6 +245,7 @@ export default async function handler(req, res) {
     if (action === "bristol_players") {
         try {
             const allPlayers = await getAllBristolPlayers()
+
             const players = allPlayers.map(p => ({
                 ecf_code: p.ecf_code,
                 full_name: p.full_name,
@@ -200,8 +256,23 @@ export default async function handler(req, res) {
                 member_no: null,
             }))
 
-            res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate")
-            return res.status(200).json({ players, total: players.length })
+            // If any club hard-FAILED (errored with no last-known-good to bridge
+            // from), don't lock the degraded list into the edge cache for a full
+            // day — use a short TTL so it self-heals on the next request once ECF
+            // recovers. A genuinely-empty club ("empty") is real, not a failure,
+            // so it doesn't trigger this.
+            const hardFailed = LAST_ROSTER_DIAG.some(d => d.status === "error")
+            res.setHeader(
+                "Cache-Control",
+                hardFailed
+                    ? "s-maxage=600, stale-while-revalidate"
+                    : "s-maxage=86400, stale-while-revalidate"
+            )
+            return res.status(200).json({
+                players,
+                total: players.length,
+                clubs: LAST_ROSTER_DIAG,
+            })
         } catch (err) {
             return res.status(500).json({ error: err.message })
         }
