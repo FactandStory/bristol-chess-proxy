@@ -136,7 +136,7 @@ function cardBase(bgColor, glowColor, pieceUri, pieceSize, watermarkText, childr
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        padding: "52px 64px 76px",
+        padding: "44px 56px 64px",
         fontFamily: "Arial, sans-serif",
         overflow: "hidden",
     }, [
@@ -154,7 +154,7 @@ function whereYouStandCard({ name, percentile, rank, total }) {
         topBar("WHERE YOU STAND"),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
             txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "I'M RATED HIGHER THAN"),
-            txt({ fontSize: 186, fontWeight: 900, color: COLORS.mint, lineHeight: 0.85, letterSpacing: "-0.05em" }, pct + "%"),
+            txt({ fontSize: 280, fontWeight: 900, color: COLORS.mint, lineHeight: 0.85, letterSpacing: "-0.05em" }, pct + "%"),
             txt({ fontSize: 22, color: "rgba(255,255,255,0.45)", marginTop: 12 }, "of all rated Bristol & Districts players"),
             txt({ fontSize: 16, color: "rgba(255,255,255,0.25)", marginTop: 8 }, "I rank #" + rank + " of " + total + " rated players"),
             txt({ fontSize: 28, fontWeight: 700, color: "rgba(255,255,255,0.8)", marginTop: 24 }, displayName(name)),
@@ -170,7 +170,7 @@ function ratingJourneyCard({ name, currentRating, yearAgoRating, change, domainL
         topBar("RATING JOURNEY · " + (domainLabel || "STANDARD").toUpperCase()),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
             txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "MY CURRENT RATING"),
-            txt({ fontSize: 186, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, String(currentRating)),
+            txt({ fontSize: 280, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, String(currentRating)),
             box({ display: "flex", alignItems: "baseline", gap: 16, marginTop: 16 }, [
                 txt({ fontSize: 52, fontWeight: 900, color: changeColor, fontFamily: "monospace" }, sign + change + " pts"),
                 txt({ fontSize: 20, color: COLORS.zinc500 }, "up from " + yearAgoRating + " a year ago"),
@@ -187,15 +187,15 @@ function seasonScoreboardCard({ name, played, wins, draws, losses }) {
             txt({ fontSize: 28, fontWeight: 700, color: "rgba(255,255,255,0.8)", marginBottom: 28 }, displayName(name)),
             box({ display: "flex", alignItems: "flex-end", gap: 40 }, [
                 box({ display: "flex", flexDirection: "column", gap: 6 }, [
-                    txt({ fontSize: 128, fontWeight: 900, color: COLORS.mint, lineHeight: 0.85, fontFamily: "monospace" }, String(wins)),
+                    txt({ fontSize: 196, fontWeight: 900, color: COLORS.mint, lineHeight: 0.85, fontFamily: "monospace" }, String(wins)),
                     txt({ fontSize: 13, fontWeight: 700, color: COLORS.zinc700, letterSpacing: "0.2em" }, "WINS"),
                 ]),
                 box({ display: "flex", flexDirection: "column", gap: 6 }, [
-                    txt({ fontSize: 128, fontWeight: 900, color: "rgba(255,255,255,0.35)", lineHeight: 0.85, fontFamily: "monospace" }, String(draws)),
+                    txt({ fontSize: 196, fontWeight: 900, color: "rgba(255,255,255,0.35)", lineHeight: 0.85, fontFamily: "monospace" }, String(draws)),
                     txt({ fontSize: 13, fontWeight: 700, color: COLORS.zinc700, letterSpacing: "0.2em" }, "DRAWS"),
                 ]),
                 box({ display: "flex", flexDirection: "column", gap: 6 }, [
-                    txt({ fontSize: 128, fontWeight: 900, color: "#FF9B8E", lineHeight: 0.85, fontFamily: "monospace" }, String(losses)),
+                    txt({ fontSize: 196, fontWeight: 900, color: "#FF9B8E", lineHeight: 0.85, fontFamily: "monospace" }, String(losses)),
                     txt({ fontSize: 13, fontWeight: 700, color: COLORS.zinc700, letterSpacing: "0.2em" }, "LOSSES"),
                 ]),
             ]),
@@ -213,7 +213,7 @@ function inGoodCompanyCard({ name, drawRate, gmName, gmDrawRate }) {
         topBar("IN GOOD COMPANY"),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
             txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "MY DRAW RATE THIS SEASON"),
-            txt({ fontSize: 186, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, drawRate + "%"),
+            txt({ fontSize: 280, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, drawRate + "%"),
             box({ display: "flex", alignItems: "baseline", gap: 14, marginTop: 14 }, [
                 txt({ fontSize: 36, fontWeight: 900, color: "rgba(255,255,255,0.2)", fontFamily: "monospace" }, "vs " + gmDrawRate + "%"),
                 txt({ fontSize: 20, color: COLORS.zinc500 }, gmName + " career"),
@@ -231,7 +231,7 @@ function giantKillingCard({ name, opponent, ownRating, oppRating, differential }
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
             txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "MY BIGGEST RATING UPSET THIS SEASON"),
             box({ display: "flex", alignItems: "center", gap: 40, marginTop: 4 }, [
-                txt({ fontSize: 200, fontWeight: 900, color: COLORS.mint, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, "+" + differential),
+                txt({ fontSize: 280, fontWeight: 900, color: COLORS.mint, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, "+" + differential),
                 box({ display: "flex", flexDirection: "column", gap: 14 }, [
                     box({ display: "flex", alignItems: "baseline", gap: 16 }, [
                         txt({ fontSize: 20, fontWeight: 700, color: COLORS.zinc700, letterSpacing: "0.18em" }, "THEM"),
@@ -257,7 +257,7 @@ function toughestOpponentCard({ name, opponent, oppRating, ownRating, outcome })
         topBar("TOUGHEST OPPONENT"),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
             txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "MY TOUGHEST OPPONENT THIS SEASON"),
-            txt({ fontSize: 186, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, String(oppRating)),
+            txt({ fontSize: 280, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, String(oppRating)),
             txt({ fontSize: 32, fontWeight: 700, color: "rgba(255,255,255,0.65)", marginTop: 12 }, oppName),
             txt({ fontSize: 24, fontWeight: 900, color: outcomeColor, letterSpacing: "0.1em", marginTop: 8 }, outcomeTag),
             txt({ fontSize: 28, fontWeight: 700, color: "rgba(255,255,255,0.8)", marginTop: 20 }, displayName(name)),
@@ -271,19 +271,19 @@ function yourPeopleCard({ name, totalGames, uniqueOpponents, wins, losses }) {
         topBar("YOUR PEOPLE"),
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
             txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "PEOPLE I PLAYED THIS SEASON"),
-            txt({ fontSize: 186, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, String(uniqueOpponents)),
+            txt({ fontSize: 280, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.05em", fontFamily: "monospace" }, String(uniqueOpponents)),
             txt({ fontSize: 22, color: "rgba(255,255,255,0.35)", marginTop: 10 }, "people sat across a board from me"),
             box({ display: "flex", alignItems: "flex-end", gap: 36, marginTop: 20 }, [
                 box({ display: "flex", flexDirection: "column", gap: 4 }, [
-                    txt({ fontSize: 56, fontWeight: 900, color: COLORS.mint, fontFamily: "monospace", lineHeight: 1 }, String(wins)),
+                    txt({ fontSize: 74, fontWeight: 900, color: COLORS.mint, fontFamily: "monospace", lineHeight: 1 }, String(wins)),
                     txt({ fontSize: 11, fontWeight: 700, color: COLORS.zinc700, letterSpacing: "0.2em" }, "WINS"),
                 ]),
                 box({ display: "flex", flexDirection: "column", gap: 4 }, [
-                    txt({ fontSize: 56, fontWeight: 900, color: "rgba(255,255,255,0.3)", fontFamily: "monospace", lineHeight: 1 }, String(draws)),
+                    txt({ fontSize: 74, fontWeight: 900, color: "rgba(255,255,255,0.3)", fontFamily: "monospace", lineHeight: 1 }, String(draws)),
                     txt({ fontSize: 11, fontWeight: 700, color: COLORS.zinc700, letterSpacing: "0.2em" }, "DRAWS"),
                 ]),
                 box({ display: "flex", flexDirection: "column", gap: 4 }, [
-                    txt({ fontSize: 56, fontWeight: 900, color: "#FF9B8E", fontFamily: "monospace", lineHeight: 1 }, String(losses)),
+                    txt({ fontSize: 74, fontWeight: 900, color: "#FF9B8E", fontFamily: "monospace", lineHeight: 1 }, String(losses)),
                     txt({ fontSize: 11, fontWeight: 700, color: COLORS.zinc700, letterSpacing: "0.2em" }, "LOSSES"),
                 ]),
             ]),
@@ -303,11 +303,11 @@ function colourStrengthCard({ name, whitePct, blackPct, stronger }) {
             box({ display: "flex", alignItems: "flex-end", gap: 48 }, [
                 box({ display: "flex", flexDirection: "column", gap: 8 }, [
                     txt({ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.3)", letterSpacing: "0.2em" }, "WHITE"),
-                    txt({ fontSize: 148, fontWeight: 900, color: "#F5F5F5", lineHeight: 0.85, letterSpacing: "-0.04em", fontFamily: "monospace" }, whitePct + "%"),
+                    txt({ fontSize: 222, fontWeight: 900, color: "#F5F5F5", lineHeight: 0.85, letterSpacing: "-0.04em", fontFamily: "monospace" }, whitePct + "%"),
                 ]),
                 box({ display: "flex", flexDirection: "column", gap: 8 }, [
                     txt({ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.3)", letterSpacing: "0.2em" }, "BLACK"),
-                    txt({ fontSize: 148, fontWeight: 900, color: "#E8A800", lineHeight: 0.85, letterSpacing: "-0.04em", fontFamily: "monospace" }, blackPct + "%"),
+                    txt({ fontSize: 222, fontWeight: 900, color: "#E8A800", lineHeight: 0.85, letterSpacing: "-0.04em", fontFamily: "monospace" }, blackPct + "%"),
                 ]),
             ]),
             txt({ fontSize: 20, color: COLORS.zinc500, marginTop: 16 }, caption),
@@ -322,7 +322,7 @@ function degreesOfSeparationCard({ name, degrees, playerCount, chain }) {
         box({ display: "flex", flexDirection: "column", gap: 0 }, [
             txt({ fontSize: 20, fontWeight: 700, color: "rgba(110,231,183,0.65)", letterSpacing: "0.18em" }, "I AM CONNECTED TO GM MICHAEL ADAMS BY"),
             box({ display: "flex", alignItems: "baseline", gap: 20, marginTop: 4 }, [
-                txt({ fontSize: 200, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.06em", fontFamily: "monospace" }, String(degrees)),
+                txt({ fontSize: 280, fontWeight: 900, color: COLORS.white, lineHeight: 0.85, letterSpacing: "-0.06em", fontFamily: "monospace" }, String(degrees)),
                 box({ display: "flex", flexDirection: "column", gap: 4, paddingBottom: 12 }, [
                     txt({ fontSize: 34, fontWeight: 700, color: "rgba(255,255,255,0.6)" }, "degrees of"),
                     txt({ fontSize: 34, fontWeight: 700, color: "rgba(255,255,255,0.6)" }, "separation"),
