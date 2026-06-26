@@ -124,7 +124,7 @@ function ctaFooter() {
         txt({ fontSize: 15, fontWeight: 600, color: "rgba(255,255,255,0.3)", letterSpacing: "0.08em" },
             "→  Find your own chess year at"),
         txt({ fontSize: 15, fontWeight: 700, color: COLORS.mint, letterSpacing: "0.1em" },
-            "BRISTOLCHESS.CO.UK/YOUR-CHESS-YEAR"),
+            "BRISTOLCHESS.COM/YOUR-CHESS-YEAR"),
     ])
 }
 
