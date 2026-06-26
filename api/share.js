@@ -20,7 +20,7 @@
 // ⚠ AT LAUNCH: swap to the live domain. This is one of the domain-migration
 // edits (alongside og.js ctaFooter and the site-wide links).
 //   Launch value:  https://bristolchess.com/your-chess-year
-const YCY_URL = "https://invigorated-pizza-303106.framer.app/your-chess-year"
+const YCY_URL = "https://bristolchess.com/your-chess-year"
 
 const PROXY = "https://bristol-chess-proxy.vercel.app"
 
